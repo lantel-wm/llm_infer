@@ -9,8 +9,8 @@ namespace {
 class MemoryManagerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    cpu_memory_manager = std::make_shared<CPUMemoryManager>();
-    gpu_memory_manager = std::make_shared<GPUMemoryManager>();
+    cpu_memory_manager = CPUMemoryManagerFactory::get_instance();
+    gpu_memory_manager = GPUMemoryManagerFactory::get_instance();
   }
 
   std::shared_ptr<CPUMemoryManager> cpu_memory_manager;
