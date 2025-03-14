@@ -9,4 +9,18 @@ target_link_libraries(memory_manager
     type
     glog::glog
     CUDA::cudart
-) 
+)
+
+# Add buffer library
+add_library(buffer
+    buffer.cpp
+    buffer.hpp
+)
+
+target_include_directories(buffer PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+target_link_libraries(buffer
+    PRIVATE
+    memory_manager
+    type
+    glog::glog
+)
