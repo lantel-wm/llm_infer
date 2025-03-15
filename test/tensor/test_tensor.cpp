@@ -538,10 +538,308 @@ TEST_F(TensorTest, Strides) {
   }
 }
 
+// Test 1D tensor at() method
+TEST_F(TensorTest, At1D) {
+  const int32_t dim0 = 5;
+  Tensor tensor(core::DataType::FP32, dim0, true, cpu_memory_manager);
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < dim0; i++) {
+    data[i] = static_cast<float>(i);
+  }
+
+  // Test non-const access
+  for (int i = 0; i < dim0; i++) {
+    EXPECT_EQ(tensor.at<float>(i), static_cast<float>(i));
+  }
+
+  // Test const access
+  const Tensor& const_tensor = tensor;
+  for (int i = 0; i < dim0; i++) {
+    EXPECT_EQ(const_tensor.at<float>(i), static_cast<float>(i));
+  }
+
+  // Test bounds checking
+  EXPECT_DEATH(tensor.at<float>(-1), ".*");
+  EXPECT_DEATH(tensor.at<float>(dim0), ".*");
+}
+
+// Test 2D tensor at() method
+TEST_F(TensorTest, At2D) {
+  const int32_t dim0 = 3, dim1 = 4;
+  Tensor tensor(core::DataType::FP32, dim0, dim1, true, cpu_memory_manager);
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < dim0 * dim1; i++) {
+    data[i] = static_cast<float>(i);
+  }
+
+  // Test non-const access
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      EXPECT_EQ(tensor.at<float>(i, j), data[i * dim1 + j]);
+    }
+  }
+
+  // Test const access
+  const Tensor& const_tensor = tensor;
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      EXPECT_EQ(const_tensor.at<float>(i, j), data[i * dim1 + j]);
+    }
+  }
+
+  // Test bounds checking
+  EXPECT_DEATH(tensor.at<float>(dim0, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, dim1), ".*");
+
+  // Test wrong number of indices
+  EXPECT_DEATH(tensor.at<float>(1), ".*");        // Too few indices
+  EXPECT_DEATH(tensor.at<float>(1, 2, 3), ".*");  // Too many indices
+}
+
+// Test 3D tensor at() method
+TEST_F(TensorTest, At3D) {
+  const int32_t dim0 = 2, dim1 = 3, dim2 = 4;
+  Tensor tensor(core::DataType::FP32, dim0, dim1, dim2, true, cpu_memory_manager);
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < dim0 * dim1 * dim2; i++) {
+    data[i] = static_cast<float>(i);
+  }
+
+  // Test non-const access
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      for (int k = 0; k < dim2; k++) {
+        int idx = (i * dim1 + j) * dim2 + k;
+        EXPECT_EQ(tensor.at<float>(i, j, k), data[idx]);
+      }
+    }
+  }
+
+  // Test const access
+  const Tensor& const_tensor = tensor;
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      for (int k = 0; k < dim2; k++) {
+        int idx = (i * dim1 + j) * dim2 + k;
+        EXPECT_EQ(const_tensor.at<float>(i, j, k), data[idx]);
+      }
+    }
+  }
+
+  // Test bounds checking
+  EXPECT_DEATH(tensor.at<float>(dim0, 0, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, dim1, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, 0, dim2), ".*");
+
+  // Test wrong number of indices
+  EXPECT_DEATH(tensor.at<float>(1, 2), ".*");        // Too few indices
+  EXPECT_DEATH(tensor.at<float>(1, 2, 3, 4), ".*");  // Too many indices
+}
+
+// Test 4D tensor at() method
+TEST_F(TensorTest, At4D) {
+  const int32_t dim0 = 2, dim1 = 2, dim2 = 2, dim3 = 2;
+  Tensor tensor(core::DataType::FP32, dim0, dim1, dim2, dim3, true, cpu_memory_manager);
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < dim0 * dim1 * dim2 * dim3; i++) {
+    data[i] = static_cast<float>(i);
+  }
+
+  // Test non-const access
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      for (int k = 0; k < dim2; k++) {
+        for (int l = 0; l < dim3; l++) {
+          int idx = ((i * dim1 + j) * dim2 + k) * dim3 + l;
+          EXPECT_EQ(tensor.at<float>(i, j, k, l), data[idx]);
+        }
+      }
+    }
+  }
+
+  // Test const access
+  const Tensor& const_tensor = tensor;
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      for (int k = 0; k < dim2; k++) {
+        for (int l = 0; l < dim3; l++) {
+          int idx = ((i * dim1 + j) * dim2 + k) * dim3 + l;
+          EXPECT_EQ(const_tensor.at<float>(i, j, k, l), data[idx]);
+        }
+      }
+    }
+  }
+
+  // Test bounds checking
+  EXPECT_DEATH(tensor.at<float>(dim0, 0, 0, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, dim1, 0, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, 0, dim2, 0), ".*");
+  EXPECT_DEATH(tensor.at<float>(0, 0, 0, dim3), ".*");
+
+  // Test wrong number of indices
+  EXPECT_DEATH(tensor.at<float>(1, 2, 3), ".*");        // Too few indices
+  EXPECT_DEATH(tensor.at<float>(1, 2, 3, 4, 5), ".*");  // Too many indices
+}
+
+// Test at() method after reshape operations
+TEST_F(TensorTest, AtAfterReshape) {
+  // Create initial 1D tensor
+  const int32_t initial_size = 24;
+  Tensor tensor(core::DataType::FP32, initial_size, true, cpu_memory_manager);
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < initial_size; i++) {
+    data[i] = static_cast<float>(i);
+  }
+
+  // Test reshape to 3D (1D -> 3D)
+  {
+    std::vector<int32_t> new_shape = {2, 3, 4};
+    tensor.reshape(new_shape);
+
+    // Verify data access with at() after reshape
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 3; j++) {
+        for (int k = 0; k < 4; k++) {
+          int idx = (i * 3 + j) * 4 + k;
+          EXPECT_EQ(tensor.at<float>(i, j, k), static_cast<float>(idx));
+        }
+      }
+    }
+
+    // Test bounds checking after reshape
+    EXPECT_DEATH(tensor.at<float>(2, 0, 0), ".*");
+    EXPECT_DEATH(tensor.at<float>(0, 3, 0), ".*");
+    EXPECT_DEATH(tensor.at<float>(0, 0, 4), ".*");
+
+    // Test wrong number of indices
+    EXPECT_DEATH(tensor.at<float>(1), ".*");           // Too few indices
+    EXPECT_DEATH(tensor.at<float>(1, 2), ".*");        // Too few indices
+    EXPECT_DEATH(tensor.at<float>(1, 2, 3, 4), ".*");  // Too many indices
+  }
+
+  // Test reshape to 2D (3D -> 2D)
+  {
+    std::vector<int32_t> new_shape_2d = {4, 6};
+    tensor.reshape(new_shape_2d);
+
+    // Verify data access with at() after second reshape
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 6; j++) {
+        int idx = i * 6 + j;
+        EXPECT_EQ(tensor.at<float>(i, j), static_cast<float>(idx));
+      }
+    }
+
+    // Test bounds checking after reshape
+    EXPECT_DEATH(tensor.at<float>(4, 0), ".*");
+    EXPECT_DEATH(tensor.at<float>(0, 6), ".*");
+
+    // Test wrong number of indices
+    EXPECT_DEATH(tensor.at<float>(1), ".*");        // Too few indices
+    EXPECT_DEATH(tensor.at<float>(1, 2, 3), ".*");  // Too many indices
+  }
+
+  // Test reshape to 1D (2D -> 1D)
+  {
+    std::vector<int32_t> new_shape_1d = {24};
+    tensor.reshape(new_shape_1d);
+
+    // Verify data access with at() after third reshape
+    for (int i = 0; i < 24; i++) {
+      EXPECT_EQ(tensor.at<float>(i), static_cast<float>(i));
+    }
+
+    // Test bounds checking after reshape
+    EXPECT_DEATH(tensor.at<float>(-1), ".*");
+    EXPECT_DEATH(tensor.at<float>(24), ".*");
+
+    // Test wrong number of indices
+    EXPECT_DEATH(tensor.at<float>(1, 2), ".*");  // Too many indices
+  }
+}
+
+// Test at() method after reset operations
+TEST_F(TensorTest, AtAfterReset) {
+  // Test reset from 2D to 3D
+  {
+    // Create initial 2D tensor
+    Tensor tensor(core::DataType::FP32, 3, 4, true, cpu_memory_manager);
+    float* data = tensor.ptr<float>();
+    for (int i = 0; i < 12; i++) {
+      data[i] = static_cast<float>(i);
+    }
+
+    // Reset to 3D tensor
+    std::vector<int32_t> new_dims = {2, 2, 3};
+    tensor.reset(core::DataType::FP32, new_dims);
+
+    // Allocate and fill new data
+    tensor.allocate(cpu_memory_manager);
+    float* new_data = tensor.ptr<float>();
+    for (int i = 0; i < 12; i++) {
+      new_data[i] = static_cast<float>(i * 2);  // Different pattern to verify reset
+    }
+
+    // Verify at() access after reset
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        for (int k = 0; k < 3; k++) {
+          int idx = (i * 2 + j) * 3 + k;
+          EXPECT_EQ(tensor.at<float>(i, j, k), static_cast<float>(idx * 2));
+        }
+      }
+    }
+
+    // Test bounds checking after reset
+    EXPECT_DEATH(tensor.at<float>(2, 0, 0), ".*");
+    EXPECT_DEATH(tensor.at<float>(0, 2, 0), ".*");
+    EXPECT_DEATH(tensor.at<float>(0, 0, 3), ".*");
+
+    // Test wrong number of indices after reset
+    EXPECT_DEATH(tensor.at<float>(1, 1), ".*");        // Too few indices
+    EXPECT_DEATH(tensor.at<float>(1, 1, 1, 1), ".*");  // Too many indices
+  }
+
+  // Test reset from 3D to 1D
+  {
+    // Create initial 3D tensor
+    Tensor tensor(core::DataType::FP32, 2, 3, 2, true, cpu_memory_manager);
+    float* data = tensor.ptr<float>();
+    for (int i = 0; i < 12; i++) {
+      data[i] = static_cast<float>(i);
+    }
+
+    // Reset to 1D tensor
+    std::vector<int32_t> new_dims = {12};
+    tensor.reset(core::DataType::FP32, new_dims);
+
+    // Allocate and fill new data
+    tensor.allocate(cpu_memory_manager);
+    float* new_data = tensor.ptr<float>();
+    for (int i = 0; i < 12; i++) {
+      new_data[i] = static_cast<float>(i * 3);  // Different pattern
+    }
+
+    // Verify at() access after reset
+    for (int i = 0; i < 12; i++) {
+      EXPECT_EQ(tensor.at<float>(i), static_cast<float>(i * 3));
+    }
+
+    // Test bounds checking after reset
+    EXPECT_DEATH(tensor.at<float>(-1), ".*");
+    EXPECT_DEATH(tensor.at<float>(12), ".*");
+
+    // Test wrong number of indices after reset
+    EXPECT_DEATH(tensor.at<float>(1, 1), ".*");  // Too many indices
+  }
+}
+
 }  // namespace
 }  // namespace tensor
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
+  // Use threadsafe death test style to avoid warnings and potential issues
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   return RUN_ALL_TESTS();
 }

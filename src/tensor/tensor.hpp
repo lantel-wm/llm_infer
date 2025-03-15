@@ -64,6 +64,8 @@ class Tensor {
 
   std::vector<size_t> strides() const;
 
+  void update_strides();
+
   bool assign(std::shared_ptr<core::Buffer> buffer);
 
   void reset(core::DataType data_type, const std::vector<int32_t>& dims);
@@ -86,30 +88,21 @@ class Tensor {
   template <typename T>
   const T& index(int64_t offset) const;
 
+  template <typename T, typename... Dims>
+  T& at(Dims... dims);
+
+  template <typename T, typename... Dims>
+  const T& at(Dims... dims) const;
+
   tensor::Tensor clone() const;
 
  private:
   size_t m_size = 0;
   std::vector<int32_t> m_dims;
+  std::vector<size_t> m_strides;
   std::shared_ptr<core::Buffer> m_buffer;
   core::DataType m_data_type = core::DataType::Unknown;
 };
-
-template <typename T>
-T& Tensor::index(int64_t offset) {
-  CHECK_GE(offset, 0);
-  CHECK_LT(offset, this->size());
-  T& val = *(reinterpret_cast<T*>(m_buffer->ptr()) + offset);
-  return val;
-}
-
-template <typename T>
-const T& Tensor::index(int64_t offset) const {
-  CHECK_GE(offset, 0);
-  CHECK_LT(offset, this->size());
-  const T& val = *(reinterpret_cast<T*>(m_buffer->ptr()) + offset);
-  return val;
-}
 
 template <typename T>
 const T* Tensor::ptr() const {
@@ -139,6 +132,72 @@ const T* Tensor::ptr(int64_t index) const {
   CHECK(m_buffer != nullptr && m_buffer->ptr() != nullptr)
       << "The data area buffer of this tensor is empty or it points to a null pointer.";
   return reinterpret_cast<const T*>(m_buffer->ptr()) + index;
+}
+
+template <typename T>
+T& Tensor::index(int64_t offset) {
+  CHECK_GE(offset, 0);
+  CHECK_LT(offset, this->size());
+  T& val = *(reinterpret_cast<T*>(m_buffer->ptr()) + offset);
+  return val;
+}
+
+template <typename T>
+const T& Tensor::index(int64_t offset) const {
+  CHECK_GE(offset, 0);
+  CHECK_LT(offset, this->size());
+  const T& val = *(reinterpret_cast<T*>(m_buffer->ptr()) + offset);
+  return val;
+}
+
+// Add variadic template version for arbitrary dimensions
+template <typename T, typename... Dims>
+T& Tensor::at(Dims... dims) {
+  // Convert parameter pack to array for easier handling
+  const std::array<int32_t, sizeof...(Dims)> indices{dims...};
+
+  // Check number of dimensions matches
+  CHECK_EQ(sizeof...(Dims), dims_size()) << "Number of indices doesn't match tensor dimensions";
+
+  // Check bounds for each dimension
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    CHECK_GE(indices[i], 0) << "Index out of bounds at dimension " << i;
+    CHECK_LT(indices[i], m_dims[i]) << "Index out of bounds at dimension " << i;
+  }
+
+  // Calculate offset using strides
+  std::vector<size_t> stride = strides();
+  int64_t offset = 0;
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    offset += indices[i] * stride[i];
+  }
+
+  return index<T>(offset);
+}
+
+// Const version of variadic at()
+template <typename T, typename... Dims>
+const T& Tensor::at(Dims... dims) const {
+  // Convert parameter pack to array for easier handling
+  const std::array<int32_t, sizeof...(Dims)> indices{dims...};
+
+  // Check number of dimensions matches
+  CHECK_EQ(sizeof...(Dims), dims_size()) << "Number of indices doesn't match tensor dimensions";
+
+  // Check bounds for each dimension
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    CHECK_GE(indices[i], 0) << "Index out of bounds at dimension " << i;
+    CHECK_LT(indices[i], m_dims[i]) << "Index out of bounds at dimension " << i;
+  }
+
+  // Calculate offset using strides
+  std::vector<size_t> stride = strides();
+  int64_t offset = 0;
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    offset += indices[i] * stride[i];
+  }
+
+  return index<T>(offset);
 }
 
 };  // namespace tensor
