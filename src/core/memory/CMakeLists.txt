@@ -4,6 +4,7 @@ add_library(memory_manager
 )
 
 target_include_directories(memory_manager PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+target_include_directories(memory_manager INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}) 
 target_link_libraries(memory_manager
     PRIVATE
     type
@@ -18,6 +19,7 @@ add_library(buffer
 )
 
 target_include_directories(buffer PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+target_include_directories(buffer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}) 
 target_link_libraries(buffer
     PRIVATE
     memory_manager

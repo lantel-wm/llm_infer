@@ -5,7 +5,10 @@
 namespace core {
 Buffer::Buffer(size_t size, std::shared_ptr<MemoryManager> memeory_manager, void* ptr,
                bool use_external)
-    : m_size(size), m_memory_manager(memeory_manager), m_ptr(ptr), m_use_external(use_external) {
+    : m_byte_size(size),
+      m_memory_manager(memeory_manager),
+      m_ptr(ptr),
+      m_use_external(use_external) {
   if (m_ptr == nullptr && memeory_manager) {
     m_device_type = memeory_manager->device_type();
     m_use_external = false;
@@ -26,12 +29,12 @@ void* Buffer::ptr() { return m_ptr; }
 
 const void* Buffer::ptr() const { return m_ptr; }
 
-size_t Buffer::size() const { return m_size; }
+size_t Buffer::byte_size() const { return m_byte_size; }
 
 bool Buffer::allocate() {
-  if (m_memory_manager && m_size != 0) {
+  if (m_memory_manager && m_byte_size != 0) {
     m_use_external = false;
-    m_ptr = m_memory_manager->allocate(m_size);
+    m_ptr = m_memory_manager->allocate(m_byte_size);
 
     if (m_ptr == nullptr) {
       return false;
@@ -49,8 +52,8 @@ void Buffer::copy_from(const Buffer& buffer) const {
   CHECK(m_memory_manager != nullptr);
   CHECK(buffer.m_ptr != nullptr);
 
-  size_t dest_size = m_size;
-  size_t src_size = buffer.m_size;
+  size_t dest_size = m_byte_size;
+  size_t src_size = buffer.m_byte_size;
   size_t size = src_size < dest_size ? src_size : dest_size;
 
   const DeviceType& buffer_device = buffer.device_type();
@@ -72,8 +75,8 @@ void Buffer::copy_from(const Buffer* buffer) const {
   CHECK(m_memory_manager != nullptr);
   CHECK(buffer != nullptr || buffer->m_ptr != nullptr);
 
-  size_t dest_size = m_size;
-  size_t src_size = buffer->m_size;
+  size_t dest_size = m_byte_size;
+  size_t src_size = buffer->m_byte_size;
   size_t size = src_size < dest_size ? src_size : dest_size;
 
   const DeviceType& buffer_device = buffer->device_type();

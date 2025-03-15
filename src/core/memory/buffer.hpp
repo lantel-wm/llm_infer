@@ -9,7 +9,7 @@ namespace core {
 
 class Buffer : public NoCopyable, std::enable_shared_from_this<Buffer> {
  private:
-  size_t m_size = 0;
+  size_t m_byte_size = 0;
   void* m_ptr = nullptr;
   bool m_use_external = false;
   DeviceType m_device_type = DeviceType::Unknown;
@@ -33,7 +33,7 @@ class Buffer : public NoCopyable, std::enable_shared_from_this<Buffer> {
 
   const void* ptr() const;
 
-  size_t size() const;
+  size_t byte_size() const;
 
   std::shared_ptr<MemoryManager> memory_manager() const;
 

@@ -46,5 +46,5 @@ find_package(CUDAToolkit REQUIRED)
 enable_testing()
 
 # Add subdirectories
-add_subdirectory(src/core)
+add_subdirectory(src)
 add_subdirectory(test) 
