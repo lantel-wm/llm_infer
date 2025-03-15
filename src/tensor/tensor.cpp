@@ -71,6 +71,7 @@ Tensor::Tensor(core::DataType data_type, int32_t dim0, bool need_alloc,
     : m_data_type(data_type) {
   m_dims.push_back(dim0);
   m_size = dim0;
+  update_strides();
   if (need_alloc && memory_manager) {
     allocate(memory_manager);
   } else {
@@ -102,6 +103,7 @@ Tensor::Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, bool need_a
   m_dims.push_back(dim0);
   m_dims.push_back(dim1);
   m_size = dim0 * dim1;
+  update_strides();
   if (need_alloc && memory_manager) {
     allocate(memory_manager);
   } else {
@@ -131,6 +133,7 @@ Tensor::Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, int32_t dim
   m_dims.push_back(dim1);
   m_dims.push_back(dim2);
   m_size = dim0 * dim1 * dim2;
+  update_strides();
   if (need_alloc && memeory_manager) {
     allocate(memeory_manager);
   } else {
@@ -162,6 +165,7 @@ Tensor::Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, int32_t dim
   m_dims.push_back(dim2);
   m_dims.push_back(dim3);
   m_size = dim0 * dim1 * dim2 * dim3;
+  update_strides();
   if (need_alloc && memory_manager) {
     allocate(memory_manager);
   } else {
@@ -186,6 +190,7 @@ Tensor::Tensor(core::DataType data_type, std::vector<int32_t> dims, bool need_al
                std::shared_ptr<core::MemoryManager> memory_manager, void* ptr)
     : m_dims(std::move(dims)), m_data_type(data_type) {
   m_size = reduce_dimension(m_dims.begin(), m_dims.end(), 1);
+  update_strides();
   if (need_alloc && memory_manager) {
     allocate(memory_manager);
   } else {
@@ -370,6 +375,7 @@ void Tensor::reset(core::DataType data_type, const std::vector<int32_t>& dims) {
   this->m_dims = dims;
   this->m_size = reduce_dimension(dims.begin(), dims.end(), 1);
   this->m_buffer = nullptr;
+  update_strides();
 }
 
 /**
@@ -411,6 +417,7 @@ void Tensor::reshape(const std::vector<int32_t>& dims) {
   }
   this->m_dims = dims;
   this->m_size = size;
+  update_strides();
 }
 
 /**
@@ -446,23 +453,41 @@ Tensor Tensor::clone() const {
 size_t Tensor::byte_size() const { return this->size() * DataTypeSize(m_data_type); }
 
 /**
- * @brief Calculates the strides for each dimension
+ * @brief Gets the strides for each dimension of the tensor
  *
- * This method calculates the number of elements to skip to move
- * to the next position in each dimension.
+ * Strides represent the number of elements to skip to move to the next position
+ * in each dimension. For a tensor with dimensions [d0, d1, d2, ..., dn], the stride
+ * for dimension i is the product of all dimensions after it.
  *
- * @return Vector containing strides for each dimension
+ * The strides are used for efficient indexing into the tensor's linear memory.
+ * Call update_strides() to recalculate if the tensor dimensions change.
+ *
+ * @return Vector containing the current strides for each dimension
  */
-std::vector<size_t> Tensor::strides() const {
-  std::vector<size_t> strides;
+std::vector<size_t> Tensor::strides() const { return m_strides; }
+
+/**
+ * @brief Updates the strides for each dimension of the tensor
+ *
+ * This method calculates and updates the internal stride values used for
+ * indexing into the tensor. Strides represent the number of elements to skip
+ * to move to the next position in each dimension.
+ *
+ * For a tensor with dimensions [d0, d1, d2, ..., dn], the stride for dimension i
+ * is the product of all dimensions after it: stride[i] = d[i+1] * d[i+2] * ... * d[n].
+ * The last dimension always has a stride of 1.
+ *
+ * If the tensor has no dimensions, the strides vector will be empty.
+ */
+void Tensor::update_strides() {
+  m_strides.clear();
   if (!m_dims.empty()) {
     for (int32_t i = 0; i < m_dims.size() - 1; ++i) {
       size_t stride = reduce_dimension(m_dims.begin() + i + 1, m_dims.end(), 1);
-      strides.push_back(stride);
+      m_strides.push_back(stride);
     }
-    strides.push_back(1);
+    m_strides.push_back(1);
   }
-  return strides;
 }
 
 /**
