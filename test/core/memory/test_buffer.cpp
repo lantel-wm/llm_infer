@@ -21,7 +21,7 @@ class BufferTest : public ::testing::Test {
 // Test default constructor
 TEST_F(BufferTest, DefaultConstructor) {
   Buffer buffer;
-  EXPECT_EQ(buffer.size(), 0);
+  EXPECT_EQ(buffer.byte_size(), 0);
   EXPECT_EQ(buffer.ptr(), nullptr);
   EXPECT_EQ(buffer.device_type(), DeviceType::Unknown);
   EXPECT_EQ(buffer.memory_manager(), nullptr);
@@ -33,7 +33,7 @@ TEST_F(BufferTest, ParameterizedConstructorCPU) {
   const size_t buffer_size = 1024;
   Buffer buffer(buffer_size, cpu_memory_manager);
 
-  EXPECT_EQ(buffer.size(), buffer_size);
+  EXPECT_EQ(buffer.byte_size(), buffer_size);
   EXPECT_NE(buffer.ptr(), nullptr);
   EXPECT_EQ(buffer.device_type(), DeviceType::CPU);
   EXPECT_EQ(buffer.memory_manager(), cpu_memory_manager);
