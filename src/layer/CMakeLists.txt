@@ -10,6 +10,7 @@ target_link_libraries(layer
     tensor
     buffer
     type
+    config
     status
     glog::glog
     CUDA::cudart

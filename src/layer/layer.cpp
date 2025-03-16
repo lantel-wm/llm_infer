@@ -277,7 +277,7 @@ void Layer::to_cuda() {
  *
  * @param config CUDA configuration to set
  */
-void Layer::set_cuda_config(std::shared_ptr<CudaConfig> config) {
+void Layer::set_cuda_config(std::shared_ptr<core::CudaConfig> config) {
   if (!config) {
     return;
   }
@@ -289,7 +289,7 @@ void Layer::set_cuda_config(std::shared_ptr<CudaConfig> config) {
  *
  * @return Current CUDA configuration
  */
-std::shared_ptr<CudaConfig> Layer::cuda_config() const { return m_cuda_config; }
+std::shared_ptr<core::CudaConfig> Layer::cuda_config() const { return m_cuda_config; }
 
 /**
  * @brief Gets the number of input tensors
