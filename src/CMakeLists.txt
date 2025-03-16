@@ -1,3 +1,3 @@
 add_subdirectory(core)
 add_subdirectory(tensor)
-add_subdirectory(op)
+add_subdirectory(layer)

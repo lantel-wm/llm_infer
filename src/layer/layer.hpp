@@ -3,20 +3,12 @@
 #include <cuda_runtime.h>
 #include <string>
 #include <vector>
+#include "config.hpp"
 #include "status.hpp"
 #include "tensor.hpp"
 #include "type.hpp"
 
 namespace op {
-
-struct CudaConfig {
-  cudaStream_t stream = nullptr;
-  ~CudaConfig() {
-    if (stream) {
-      cudaStreamDestroy(stream);
-    }
-  }
-};
 
 class Layer;
 enum class LayerType : uint8_t {
@@ -155,14 +147,14 @@ class Layer : public LayerBase {
 
   virtual void to_cuda();
 
-  void set_cuda_config(std::shared_ptr<CudaConfig> config);
+  void set_cuda_config(std::shared_ptr<core::CudaConfig> config);
 
-  std::shared_ptr<CudaConfig> cuda_config() const;
+  std::shared_ptr<core::CudaConfig> cuda_config() const;
 
  protected:
   std::vector<tensor::Tensor> m_inputs;
   std::vector<tensor::Tensor> m_outputs;
-  std::shared_ptr<CudaConfig> m_cuda_config;
+  std::shared_ptr<core::CudaConfig> m_cuda_config;
 };
 
 class LayerParam : public Layer {
