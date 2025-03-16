@@ -48,7 +48,7 @@ typedef void (*ScaleSumKernel)(const tensor::Tensor& value, const tensor::Tensor
                                const tensor::Tensor& output, int t, int size, int stride,
                                void* stream);
 
-void softmax_inplace_cpu(const float* input_ptr, size_t size);
+void softmax_kernel_cpu(const float* input_ptr, size_t size);
 
 AddKernel get_add_kernel(core::DeviceType device_type);
 
