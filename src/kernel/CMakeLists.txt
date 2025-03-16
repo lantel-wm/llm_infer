@@ -17,6 +17,8 @@ target_link_libraries(kernel
 
 # Add CPU kernels subdirectory
 add_subdirectory(cpu)
+add_subdirectory(gpu)
 
 # Link CPU kernel libraries to the main kernel library
 target_link_libraries(kernel PRIVATE ${CPU_KERNEL_LIBS})
+target_link_libraries(kernel PRIVATE ${GPU_KERNEL_LIBS})
