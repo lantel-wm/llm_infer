@@ -15,21 +15,25 @@ class Tensor {
   explicit Tensor() = default;
 
   explicit Tensor(core::DataType data_type, int32_t dim0, bool need_alloc = false,
-                  std::shared_ptr<core::MemoryManager> alloc = nullptr, void* ptr = nullptr);
+                  std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
+                  void* ptr = nullptr);
 
   explicit Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, bool need_alloc = false,
-                  std::shared_ptr<core::MemoryManager> alloc = nullptr, void* ptr = nullptr);
+                  std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
+                  void* ptr = nullptr);
 
   explicit Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, int32_t dim2,
                   bool need_alloc = false, std::shared_ptr<core::MemoryManager> alloc = nullptr,
                   void* ptr = nullptr);
 
   explicit Tensor(core::DataType data_type, int32_t dim0, int32_t dim1, int32_t dim2, int32_t dim3,
-                  bool need_alloc = false, std::shared_ptr<core::MemoryManager> alloc = nullptr,
+                  bool need_alloc = false,
+                  std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
                   void* ptr = nullptr);
 
   explicit Tensor(core::DataType data_type, std::vector<int32_t> dims, bool need_alloc = false,
-                  std::shared_ptr<core::MemoryManager> alloc = nullptr, void* ptr = nullptr);
+                  std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
+                  void* ptr = nullptr);
 
   void to_cpu();
 
@@ -37,7 +41,7 @@ class Tensor {
 
   bool is_empty() const;
 
-  void init_buffer(std::shared_ptr<core::MemoryManager> alloc, core::DataType data_type,
+  void init_buffer(std::shared_ptr<core::MemoryManager> memory_manager, core::DataType data_type,
                    bool need_alloc, void* ptr);
 
   template <typename T>
