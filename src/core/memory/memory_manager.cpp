@@ -121,10 +121,8 @@ void* GPUMemoryManager::allocate(size_t size) const {
   state = cudaMalloc(&ptr, size);
   if (cudaSuccess != state) {
     char buf[256];
-    snprintf(buf, 256,
-             "Error: CUDA error when allocating %lu MB memory! maybe there's no enough memory "
-             "left on  device.",
-             size >> 20);
+    snprintf(buf, 256, "Error: CUDA error (%d: %s) when allocating %f MB memory!", state,
+             cudaGetErrorString(state), static_cast<float>(size) / (1 << 20));
     LOG(ERROR) << buf;
     return nullptr;
   }
