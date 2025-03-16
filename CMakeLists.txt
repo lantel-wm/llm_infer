@@ -1,13 +1,18 @@
 cmake_minimum_required(VERSION 3.18)
 project(llm_infer LANGUAGES CUDA CXX)
 
+# Ensure compile commands are exported with full command line
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_NINJA_FORCE_RESPONSE_FILE OFF)
+set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
+set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_LIBRARIES OFF)
+set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_OBJECTS OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Enable generation of compile_commands.json
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Ensure we use the system C++ standard library
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-new-dtags")
