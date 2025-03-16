@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(llm_infer LANGUAGES CUDA CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -41,6 +41,22 @@ FetchContent_MakeAvailable(glog)
 
 # Find CUDA
 find_package(CUDAToolkit REQUIRED)
+
+# Find LAPACK and BLAS
+find_package(LAPACK REQUIRED)
+find_package(BLAS REQUIRED)
+
+# Fetch and make Armadillo available
+FetchContent_Declare(
+    armadillo
+    GIT_REPOSITORY https://gitlab.com/conradsnicta/armadillo-code.git
+    GIT_TAG 14.0.2
+)
+set(BUILD_SHARED_LIBS OFF)  # Build static libraries
+set(ARMA_USE_LAPACK ON)     # Enable LAPACK support
+set(ARMA_USE_BLAS ON)       # Enable BLAS support
+set(ARMA_NO_DEBUG ON)       # Disable debug mode for better performance
+FetchContent_MakeAvailable(armadillo)
 
 # Enable testing
 enable_testing()
