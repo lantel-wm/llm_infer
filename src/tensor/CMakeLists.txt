@@ -3,12 +3,18 @@ add_library(tensor
     tensor.hpp
 )
 
-target_include_directories(tensor PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
-target_include_directories(tensor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}) 
+# Make headers available for both regular C++ and CUDA
+target_include_directories(tensor 
+    PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CUDAToolkit_INCLUDE_DIRS}
+)
+
 target_link_libraries(tensor
+    PUBLIC
+        buffer
+        type
+        CUDA::cudart
     PRIVATE
-    buffer
-    type
-    glog::glog
-    CUDA::cudart
+        glog::glog
 )

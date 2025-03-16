@@ -18,8 +18,13 @@ add_library(buffer
     buffer.hpp
 )
 
-target_include_directories(buffer PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
-target_include_directories(buffer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}) 
+# Make headers available for both regular C++ and CUDA
+target_include_directories(buffer 
+    PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CUDAToolkit_INCLUDE_DIRS}
+)
+
 target_link_libraries(buffer
     PRIVATE
     memory_manager

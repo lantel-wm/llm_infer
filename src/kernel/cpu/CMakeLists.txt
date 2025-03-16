@@ -20,8 +20,15 @@ foreach(KERNEL_SOURCE ${CPU_KERNEL_SOURCES})
     )
     
     # Set include directories
+    target_include_directories(${KERNEL_NAME} 
+        PRIVATE 
+        ${CMAKE_SOURCE_DIR}/src/tensor
+        ${CMAKE_SOURCE_DIR}/src/core/memory
+        ${CMAKE_SOURCE_DIR}/src/core/type
+        ${CMAKE_SOURCE_DIR}/src/core/config
+        ${CUDAToolkit_INCLUDE_DIRS}
+    )
     target_include_directories(${KERNEL_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_include_directories(${KERNEL_NAME} PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
     
     # Link with necessary dependencies
     target_link_libraries(${KERNEL_NAME}
