@@ -57,3 +57,6 @@ install_manifest.txt
 
 # clangd
 .clangd
+
+# test
+python_test/
