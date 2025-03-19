@@ -99,6 +99,9 @@ class Tensor {
   template <typename T, typename... Dims>
   const T& at(Dims... dims) const;
 
+  template <typename... Dims>
+  size_t get_offset(Dims... dims) const;
+
   template <typename T>
   void transpose(int32_t axis0, int32_t axis1);
 
@@ -280,6 +283,30 @@ const T& Tensor::at(Dims... dims) const {
   }
 
   return index<T>(offset);
+}
+
+template <typename... Dims>
+size_t Tensor::get_offset(Dims... dims) const {
+  // Convert parameter pack to array for easier handling
+  const std::array<int32_t, sizeof...(Dims)> indices{dims...};
+
+  // Check number of dimensions matches
+  CHECK_EQ(sizeof...(Dims), dims_size()) << "Number of indices doesn't match tensor dimensions";
+
+  // Check bounds for each dimension
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    CHECK_GE(indices[i], 0) << "Index out of bounds at dimension " << i;
+    CHECK_LT(indices[i], m_dims[i]) << "Index out of bounds at dimension " << i;
+  }
+
+  // Calculate offset using strides
+  std::vector<size_t> stride = strides();
+  size_t offset = 0;
+  for (size_t i = 0; i < sizeof...(Dims); ++i) {
+    offset += indices[i] * stride[i];
+  }
+
+  return offset;
 }
 
 /**

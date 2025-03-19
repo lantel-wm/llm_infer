@@ -961,6 +961,76 @@ TEST_F(TensorTest, Transpose) {
   EXPECT_DEATH(error_tensor.transpose<float>(0, 2), ".*");
 }
 
+// Test get_offset method
+TEST_F(TensorTest, GetOffset) {
+  // Test 1D tensor offset calculation
+  const int32_t dim0 = 5;
+  Tensor tensor1d(core::DataType::FP32, dim0, true, cpu_memory_manager);
+
+  // Offset should match the index in 1D
+  for (int i = 0; i < dim0; i++) {
+    EXPECT_EQ(tensor1d.get_offset(i), i);
+  }
+
+  // Test 2D tensor offset calculation
+  const int32_t dim1 = 3, dim2 = 4;
+  Tensor tensor2d(core::DataType::FP32, dim1, dim2, true, cpu_memory_manager);
+
+  // Offsets should match row-major layout
+  for (int i = 0; i < dim1; i++) {
+    for (int j = 0; j < dim2; j++) {
+      EXPECT_EQ(tensor2d.get_offset(i, j), i * dim2 + j);
+    }
+  }
+
+  // Test 3D tensor offset calculation
+  const int32_t dim3d_0 = 2, dim3d_1 = 3, dim3d_2 = 4;
+  Tensor tensor3d(core::DataType::FP32, dim3d_0, dim3d_1, dim3d_2, true, cpu_memory_manager);
+
+  // Offsets should match row-major layout in 3D
+  for (int i = 0; i < dim3d_0; i++) {
+    for (int j = 0; j < dim3d_1; j++) {
+      for (int k = 0; k < dim3d_2; k++) {
+        EXPECT_EQ(tensor3d.get_offset(i, j, k), (i * dim3d_1 + j) * dim3d_2 + k);
+      }
+    }
+  }
+
+  // Test 4D tensor offset calculation
+  std::vector<int32_t> dims4d = {2, 3, 4, 5};
+  Tensor tensor4d(core::DataType::FP32, dims4d, true, cpu_memory_manager);
+
+  // Calculate expected stride for 4D tensor
+  std::vector<size_t> expected_strides = {3 * 4 * 5, 4 * 5, 5, 1};
+
+  // Verify a few specific offsets
+  EXPECT_EQ(tensor4d.get_offset(0, 0, 0, 0), 0);
+  EXPECT_EQ(tensor4d.get_offset(0, 0, 0, 4), 4);
+  EXPECT_EQ(tensor4d.get_offset(0, 0, 1, 0), 5);
+  EXPECT_EQ(tensor4d.get_offset(0, 1, 0, 0), 20);
+  EXPECT_EQ(tensor4d.get_offset(1, 0, 0, 0), 60);
+  EXPECT_EQ(tensor4d.get_offset(1, 2, 3, 4), 119);  // Last element
+
+  // Test get_offset after reshape
+  Tensor reshaped_tensor = tensor4d.clone();
+  std::vector<int32_t> new_shape = {6, 20};
+  reshaped_tensor.reshape(new_shape);
+
+  // Verify offsets in reshaped tensor
+  EXPECT_EQ(reshaped_tensor.get_offset(0, 0), 0);
+  EXPECT_EQ(reshaped_tensor.get_offset(0, 19), 19);
+  EXPECT_EQ(reshaped_tensor.get_offset(1, 0), 20);
+  EXPECT_EQ(reshaped_tensor.get_offset(5, 19), 119);  // Last element
+
+  // Test bounds checking
+  EXPECT_DEATH(tensor2d.get_offset(dim1, 0), ".*");
+  EXPECT_DEATH(tensor2d.get_offset(0, dim2), ".*");
+
+  // Test wrong number of indices
+  EXPECT_DEATH(tensor2d.get_offset(1), ".*");        // Too few indices
+  EXPECT_DEATH(tensor2d.get_offset(1, 1, 1), ".*");  // Too many indices
+}
+
 }  // namespace
 }  // namespace tensor
 
