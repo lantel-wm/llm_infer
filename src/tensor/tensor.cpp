@@ -1,7 +1,9 @@
 #include "tensor.hpp"
 #include <cuda_runtime.h>
 #include <glog/logging.h>
+#include <cstdint>
 #include <numeric>
+#include "type.hpp"
 
 namespace tensor {
 /**

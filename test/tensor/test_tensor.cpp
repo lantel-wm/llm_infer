@@ -834,6 +834,133 @@ TEST_F(TensorTest, AtAfterReset) {
   }
 }
 
+// Test transpose method
+TEST_F(TensorTest, Transpose) {
+  // Create a 2D tensor (3x4)
+  const int32_t dim0 = 3, dim1 = 4;
+  Tensor tensor(core::DataType::FP32, dim0, dim1, true, cpu_memory_manager);
+
+  // Fill with test pattern
+  float* data = tensor.ptr<float>();
+  for (int i = 0; i < dim0; i++) {
+    for (int j = 0; j < dim1; j++) {
+      data[i * dim1 + j] = static_cast<float>(i * 10 + j);
+    }
+  }
+
+  // Transpose dimensions 0 and 1
+  tensor.transpose<float>(0, 1);
+
+  // Verify dimensions are swapped
+  EXPECT_EQ(tensor.dims_size(), 2);
+  EXPECT_EQ(tensor.get_dim(0), dim1);  // Was dim0
+  EXPECT_EQ(tensor.get_dim(1), dim0);  // Was dim1
+
+  // Verify data has been correctly transposed
+  for (int i = 0; i < dim1; i++) {
+    for (int j = 0; j < dim0; j++) {
+      // Element at (i,j) in transposed tensor should be element (j,i) in original
+      EXPECT_EQ(tensor.at<float>(i, j), static_cast<float>(j * 10 + i));
+    }
+  }
+
+  // Test 3D tensor transpose (2x3x4)
+  const int32_t tdim0 = 2, tdim1 = 3, tdim2 = 4;
+  Tensor tensor3d(core::DataType::FP32, tdim0, tdim1, tdim2, true, cpu_memory_manager);
+
+  // Fill 3D tensor with test pattern
+  data = tensor3d.ptr<float>();
+  for (int i = 0; i < tdim0; i++) {
+    for (int j = 0; j < tdim1; j++) {
+      for (int k = 0; k < tdim2; k++) {
+        data[(i * tdim1 + j) * tdim2 + k] = static_cast<float>(i * 100 + j * 10 + k);
+      }
+    }
+  }
+
+  // Transpose dimensions 0 and 2
+  tensor3d.transpose<float>(0, 2);
+
+  // Verify dimensions are swapped
+  EXPECT_EQ(tensor3d.dims_size(), 3);
+  EXPECT_EQ(tensor3d.get_dim(0), tdim2);  // Was tdim0
+  EXPECT_EQ(tensor3d.get_dim(1), tdim1);  // Unchanged
+  EXPECT_EQ(tensor3d.get_dim(2), tdim0);  // Was tdim2
+
+  // Verify data has been correctly transposed
+  for (int i = 0; i < tdim2; i++) {
+    for (int j = 0; j < tdim1; j++) {
+      for (int k = 0; k < tdim0; k++) {
+        // Element at (i,j,k) in transposed tensor should be element (k,j,i) in original
+        EXPECT_EQ(tensor3d.at<float>(i, j, k), static_cast<float>(k * 100 + j * 10 + i));
+      }
+    }
+  }
+
+  // Test 4D tensor transpose (2x3x4x5)
+  const int32_t fdim0 = 2, fdim1 = 3, fdim2 = 4, fdim3 = 5;
+  Tensor tensor4d(core::DataType::FP32, fdim0, fdim1, fdim2, fdim3, true, cpu_memory_manager);
+
+  // Fill 4D tensor with test pattern
+  data = tensor4d.ptr<float>();
+  for (int i = 0; i < fdim0; i++) {
+    for (int j = 0; j < fdim1; j++) {
+      for (int k = 0; k < fdim2; k++) {
+        for (int l = 0; l < fdim3; l++) {
+          data[((i * fdim1 + j) * fdim2 + k) * fdim3 + l] =
+              static_cast<float>(i * 1000 + j * 100 + k * 10 + l);
+        }
+      }
+    }
+  }
+
+  // Transpose dimensions 1 and 2
+  tensor4d.transpose<float>(1, 2);
+
+  // Verify dimensions are swapped
+  EXPECT_EQ(tensor4d.dims_size(), 4);
+  EXPECT_EQ(tensor4d.get_dim(0), fdim0);  // Unchanged
+  EXPECT_EQ(tensor4d.get_dim(1), fdim2);  // Was fdim1
+  EXPECT_EQ(tensor4d.get_dim(2), fdim1);  // Was fdim2
+  EXPECT_EQ(tensor4d.get_dim(3), fdim3);  // Unchanged
+
+  // Verify data has been correctly transposed
+  for (int i = 0; i < fdim0; i++) {
+    for (int j = 0; j < fdim2; j++) {
+      for (int k = 0; k < fdim1; k++) {
+        for (int l = 0; l < fdim3; l++) {
+          // Element at (i,j,k,l) in transposed tensor should be element (i,k,j,l) in original
+          EXPECT_EQ(tensor4d.at<float>(i, j, k, l),
+                    static_cast<float>(i * 1000 + k * 100 + j * 10 + l));
+        }
+      }
+    }
+  }
+
+  // Test no-op transpose (same axis)
+  Tensor tensor_copy = tensor.clone();
+  tensor_copy.transpose<float>(0, 0);
+
+  // Dimensions should be unchanged
+  EXPECT_EQ(tensor_copy.dims_size(), tensor.dims_size());
+  EXPECT_EQ(tensor_copy.get_dim(0), tensor.get_dim(0));
+  EXPECT_EQ(tensor_copy.get_dim(1), tensor.get_dim(1));
+
+  // Data should be unchanged
+  for (size_t i = 0; i < tensor.size(); i++) {
+    EXPECT_EQ(tensor_copy.index<float>(i), tensor.index<float>(i));
+  }
+
+  // Test error conditions
+  Tensor error_tensor(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
+
+  // Invalid axis should trigger crash in debug mode
+  EXPECT_DEATH(error_tensor.transpose<float>(-1, 0), ".*");
+  EXPECT_DEATH(error_tensor.transpose<float>(0, -1), ".*");
+  EXPECT_DEATH(error_tensor.transpose<float>(2, 0), ".*");
+  EXPECT_DEATH(error_tensor.transpose<float>(0, 2), ".*");
+}
+
 }  // namespace
 }  // namespace tensor
 
