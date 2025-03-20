@@ -3,6 +3,23 @@
 
 namespace kernel {
 
+/**
+ * @brief Computes sine and cosine cache for Rotary Position Embedding (RoPE) on CPU
+ *
+ * This function precalculates sine and cosine values used for rotary position embeddings.
+ * RoPE enables relative position awareness by rotating pairs of vector components by
+ * position-dependent angles. The cache is computed using frequencies that
+ * decay exponentially with dimension index.
+ *
+ * @param rope_theta Base value for frequency calculation (typically 10000.0)
+ * @param head_size Size of each attention head
+ * @param max_seq_len Maximum sequence length to precompute embeddings for
+ * @param sin_cache Output tensor to store sine values [max_seq_len, head_size]
+ * @param cos_cache Output tensor to store cosine values [max_seq_len, head_size]
+ *
+ * @note The function handles pairs of dimensions (2i, 2i+1) with the same
+ *       frequency but different rotations, as per the RoPE formulation
+ */
 void sin_cos_cache_calc_cpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache) {
   float* sin_cache_ptr = const_cast<float*>(sin_cache.ptr<float>());
@@ -22,6 +39,27 @@ void sin_cos_cache_calc_cpu(float rope_theta, int head_size, int max_seq_len,
   }
 }
 
+/**
+ * @brief Applies Rotary Position Embedding (RoPE) to query and key tensors on CPU
+ *
+ * This function applies rotary position embeddings to the query and key tensors used
+ * in attention mechanisms. RoPE rotates vector components in 2D subspaces based on
+ * token positions, allowing the model to be aware of relative positions without
+ * requiring explicit position embeddings to be added.
+ *
+ * @param hidden_size Total dimension of query tensor (num_q_heads * head_size)
+ * @param key_value_size Total dimension of key tensor (num_k_heads * head_size)
+ * @param head_size Size of each attention head
+ * @param input_q Query tensor [batch_size, seq_len, num_q_heads, head_size]
+ * @param input_k Key tensor [batch_size, seq_len, num_k_heads, head_size]
+ * @param input_pos Position indices tensor
+ * @param sin_cache Precomputed sine values [max_seq_len, head_size]
+ * @param cos_cache Precomputed cosine values [max_seq_len, head_size]
+ * @param stream Unused in CPU implementation but kept for API consistency with GPU version
+ *
+ * @note The function applies rotations in place, modifying input_q and input_k directly.
+ *       It supports grouped-query attention where num_q_heads may be larger than num_k_heads.
+ */
 void rope_kernel_cpu(int32_t hidden_size, int32_t key_value_size, int32_t head_size,
                      const tensor::Tensor& input_q, const tensor::Tensor& input_k,
                      const tensor::Tensor& input_pos, const tensor::Tensor& sin_cache,

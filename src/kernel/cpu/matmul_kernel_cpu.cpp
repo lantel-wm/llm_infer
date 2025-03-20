@@ -2,6 +2,22 @@
 #include <armadillo>
 
 namespace kernel {
+/**
+ * @brief Performs matrix multiplication between input and weight tensors on CPU
+ *
+ * This function multiplies the input tensor by the weight tensor and applies an optional scaling.
+ * It uses the Armadillo library to efficiently perform the matrix multiplication operation.
+ * The input tensor can be either 1D or 2D, while the weight tensor must be 2D.
+ *
+ * @param input Input tensor (1D or 2D)
+ * @param weight Weight tensor (must be 2D)
+ * @param output Output tensor to store the result
+ * @param scale Optional scaling factor applied to the multiplication result
+ * @param stream Unused in CPU implementation but kept for API consistency with GPU version
+ *
+ * @note If input is 1D, it's treated as a single row. If 2D, each column is a separate vector.
+ *       The function checks dimension compatibility: input.dim1 must equal weight.dim0
+ */
 void matmul_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weight,
                        const tensor::Tensor& output, float scale, void* stream) {
   CHECK(input.is_empty() == false);

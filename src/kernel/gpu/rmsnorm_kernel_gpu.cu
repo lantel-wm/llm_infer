@@ -2,6 +2,25 @@
 #include "rmsnorm_kernel_gpu.cuh"
 
 namespace kernel {
+/**
+ * @brief CUDA kernel for applying Root Mean Square Normalization to a row of data
+ *
+ * This kernel normalizes a row of input data using RMSNorm:
+ * output = weight * (input / sqrt(mean(input^2) + epsilon))
+ * It operates efficiently by:
+ * 1. Computing the sum of squares across the row
+ * 2. Using block reduction to aggregate results
+ * 3. Applying normalization with the scaling weights
+ *
+ * @tparam BLOCK_DIM Block size for the CUDA kernel
+ * @param in Pointer to input data
+ * @param wei Pointer to weight data for scaling
+ * @param out Pointer to output buffer
+ * @param size Number of elements in the row
+ * @param eps Small epsilon value for numerical stability
+ *
+ * @note Uses vectorized loads/stores when possible for improved performance
+ */
 template <int32_t BLOCK_DIM>
 static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int size, float eps) {
   const int tid = threadIdx.x;
@@ -50,6 +69,20 @@ static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int si
   }
 }
 
+/**
+ * @brief Applies Root Mean Square Normalization to input tensor on GPU
+ *
+ * This function normalizes the input tensor using RMSNorm by launching the appropriate
+ * CUDA kernel with the right block size. It selects the optimal kernel based on
+ * the input size and optionally uses a CUDA stream for asynchronous execution.
+ *
+ * @param input Input tensor to be normalized
+ * @param weight Weight tensor for element-wise scaling after normalization
+ * @param output Output tensor to store the normalized result
+ * @param stream Optional CUDA stream for asynchronous execution
+ *
+ * @note Both input and weight tensors must have the same shape and be on GPU
+ */
 void rmsnorm_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight,
                         const tensor::Tensor& output, void* stream) {
   CHECK(!input.is_empty());

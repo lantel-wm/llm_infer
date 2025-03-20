@@ -5,6 +5,20 @@
 #include "tensor.hpp"
 
 namespace kernel {
+/**
+ * @brief Computes the query-key attention scores for multi-head attention on CPU
+ *
+ * This function calculates the scaled dot-product attention scores between query and key tensors:
+ * score = (Q·K^T) * scale
+ * It optionally applies a causal mask to ensure autoregressive properties.
+ *
+ * @param query Query tensor of shape [query_seq_len, head_size]
+ * @param key Key tensor of shape [kv_seq_len, head_size]
+ * @param score Output tensor for attention scores of shape [query_seq_len, kv_seq_len]
+ * @param scale Scaling factor for dot product (typically 1/sqrt(head_size))
+ * @param is_causal Whether to apply causal masking (each position attends only to previous
+ * positions)
+ */
 void mha_qkT_kernel_cpu(const tensor::Tensor& query, const tensor::Tensor& key,
                         const tensor::Tensor& score, float scale, bool is_causal) {
   const int32_t query_seq_len = query.get_dim(0);
@@ -38,6 +52,14 @@ void mha_qkT_kernel_cpu(const tensor::Tensor& query, const tensor::Tensor& key,
   }
 }
 
+/**
+ * @brief Applies softmax to attention scores in multi-head attention on CPU
+ *
+ * This function applies the softmax function to each row of the attention score matrix,
+ * normalizing the attention weights for each query position.
+ *
+ * @param score Attention score tensor of shape [query_seq_len, kv_seq_len] (modified in-place)
+ */
 void mha_softmax_kernel_cpu(const tensor::Tensor& score) {
   const int32_t query_seq_len = score.get_dim(0);
   const int32_t kv_seq_len = score.get_dim(1);
@@ -52,6 +74,16 @@ void mha_softmax_kernel_cpu(const tensor::Tensor& score) {
   });
 }
 
+/**
+ * @brief Computes the weighted sum of value vectors based on attention scores on CPU
+ *
+ * This function calculates the final output of the attention mechanism by multiplying
+ * the attention score matrix with the value tensor: output = score·V
+ *
+ * @param score Attention score tensor of shape [query_seq_len, kv_seq_len]
+ * @param value Value tensor of shape [kv_seq_len, head_size]
+ * @param output Output tensor of shape [query_seq_len, head_size]
+ */
 void mha_scorev_kernel_cpu(const tensor::Tensor& score, const tensor::Tensor& value,
                            const tensor::Tensor& output) {
   const int32_t query_seq_len = score.get_dim(0);
@@ -69,6 +101,26 @@ void mha_scorev_kernel_cpu(const tensor::Tensor& score, const tensor::Tensor& va
   out_mat = (score_mat.t() * value_mat.t()).t();
 }
 
+/**
+ * @brief Performs complete multi-head attention operation on CPU
+ *
+ * This function executes the full multi-head attention computation by:
+ * 1. Computing attention scores between query and key
+ * 2. Applying softmax to normalize scores
+ * 3. Computing weighted sum with values
+ *
+ * @param layer_idx Current layer index
+ * @param num_layers Total number of layers
+ * @param batch_size Batch size (typically 1 for inference)
+ * @param query_seq_len Length of query sequence
+ * @param kv_seq_len Length of key-value sequence
+ * @param mha_output Output tensor for multi-head attention results
+ * @param query_tensor Query tensor
+ * @param score_tensor Tensor to store intermediate attention scores
+ * @param key_cache_tensor KV cache tensor for keys
+ * @param value_cache_tensor KV cache tensor for values
+ * @param stream Unused in CPU implementation but kept for API consistency with GPU version
+ */
 void mha_kernel_cpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
                     int32_t query_seq_len, int32_t kv_seq_len, tensor::Tensor& mha_output,
                     tensor::Tensor& query_tensor, tensor::Tensor& score_tensor,

@@ -8,6 +8,22 @@ constexpr int block_size_x = 16;
 constexpr int block_size_y = 16;
 constexpr int block_size = block_size_x * block_size_y;
 
+/**
+ * @brief CUDA device function for applying softmax to attention scores
+ *
+ * This function applies the softmax operation to each row of the attention score matrix.
+ * It performs the following steps for numerical stability:
+ * 1. Find the maximum value in each row
+ * 2. Subtract the maximum from each element
+ * 3. Calculate the exponential of each element
+ * 4. Normalize by the sum of exponentials
+ *
+ * @param input Pointer to the attention score matrix [batch_size, num_heads, seq_len, seq_len]
+ * @param batch_size Number of sequences in the batch
+ * @param num_heads Number of attention heads
+ * @param dim0 First dimension size (query sequence length)
+ * @param dim1 Second dimension size (key-value sequence length)
+ */
 __device__ void softmax_kernel_gpu_fp32(float* __restrict__ input, int batch_size, int num_heads,
                                         int dim0, int dim1) {
   // input: (batch_size, num_heads, seq_len, seq_len)
@@ -68,6 +84,29 @@ void mha_softmax_kernel_gpu(int32_t num_heads, int32_t batch_size, tensor::Tenso
                                           score.get_dim(0), score.get_dim(1));
 }
 
+/**
+ * @brief CUDA kernel for multi-head attention in prefill phase
+ *
+ * This kernel performs the full self-attention calculation for the prefill phase
+ * where query_seq_len equals kv_seq_len. It handles all steps:
+ * 1. Computing scaled dot-product attention scores
+ * 2. Applying causal masking
+ * 3. Applying softmax normalization
+ * 4. Computing weighted average of value vectors
+ *
+ * @param batch_size Number of sequences in the batch
+ * @param seq_len Sequence length (same for query and key-value)
+ * @param max_position_embedding Maximum supported sequence length in KV cache
+ * @param num_heads Number of attention heads
+ * @param num_kv_heads Number of key-value heads (for grouped-query attention)
+ * @param kv_mul Multiplier for key-value sharing (num_heads / num_kv_heads)
+ * @param head_size Size of each attention head
+ * @param query Query tensor
+ * @param score Score tensor to store attention weights
+ * @param output Output tensor for attention results
+ * @param key_cache KV cache tensor for keys
+ * @param value_cache KV cache tensor for values
+ */
 __global__ void multi_head_attention_kernel_fp32(int32_t batch_size, int32_t seq_len,
                                                  int32_t max_position_embedding, int32_t num_heads,
                                                  int32_t num_kv_heads, int32_t kv_mul,
@@ -170,6 +209,28 @@ __global__ void multi_head_attention_kernel_fp32(int32_t batch_size, int32_t seq
   }
 }
 
+/**
+ * @brief CUDA kernel for multi-head attention in decoding phase
+ *
+ * This kernel performs the full self-attention calculation for the decoding phase
+ * where query_seq_len is 1 and kv_seq_len is the context length. It calculates:
+ * 1. Attention scores between current query and all previous keys
+ * 2. Softmax normalization of scores
+ * 3. Weighted average of value vectors
+ *
+ * @param batch_size Number of sequences in the batch
+ * @param kv_seq_len Number of key-value pairs in the context
+ * @param max_position_embedding Maximum supported sequence length in KV cache
+ * @param num_heads Number of attention heads
+ * @param num_kv_heads Number of key-value heads (for grouped-query attention)
+ * @param kv_mul Multiplier for key-value sharing (num_heads / num_kv_heads)
+ * @param head_size Size of each attention head
+ * @param query Query tensor (single token)
+ * @param score Score tensor to store attention weights
+ * @param output Output tensor for attention results
+ * @param key_cache KV cache tensor for keys
+ * @param value_cache KV cache tensor for values
+ */
 __global__ void decoding_attention_kernel_fp32(int32_t batch_size, int32_t kv_seq_len,
                                                int32_t max_position_embedding, int32_t num_heads,
                                                int32_t num_kv_heads, int32_t kv_mul,
@@ -258,6 +319,26 @@ __global__ void decoding_attention_kernel_fp32(int32_t batch_size, int32_t kv_se
   }
 }
 
+/**
+ * @brief Performs complete multi-head attention operation on GPU
+ *
+ * This function executes the full multi-head attention computation by selecting
+ * the appropriate kernel based on whether it's in prefill or decoding phase.
+ * It handles both the computation of attention scores and the application of
+ * those scores to value vectors.
+ *
+ * @param layer_idx Current layer index
+ * @param num_layers Total number of layers
+ * @param batch_size Batch size (typically 1 for inference)
+ * @param query_seq_len Length of query sequence
+ * @param kv_seq_len Length of key-value sequence
+ * @param mha_output Output tensor for multi-head attention results
+ * @param query_tensor Query tensor
+ * @param score_tensor Tensor to store intermediate attention scores
+ * @param key_cache_tensor KV cache tensor for keys
+ * @param value_cache_tensor KV cache tensor for values
+ * @param stream CUDA stream for asynchronous execution
+ */
 void mha_kernel_gpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
                     int32_t query_seq_len, int32_t kv_seq_len, tensor::Tensor& mha_output,
                     tensor::Tensor& query_tensor, tensor::Tensor& score_tensor,
@@ -278,7 +359,7 @@ void mha_kernel_gpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
   CHECK(batch_size == query_tensor.get_dim(0));
 
   const int32_t max_position_embedding = key_cache_tensor.get_dim(3);
-
+  CHECK(kv_seq_len <= max_position_embedding);
   CHECK(query_seq_len <= max_position_embedding);
 
   const int32_t num_heads = query_tensor.get_dim(2);
