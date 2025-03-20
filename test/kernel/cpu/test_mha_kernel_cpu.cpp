@@ -348,7 +348,7 @@ output.detach().numpy().tofile('mha_output.bin')
 
   // Create tensor shapes
   std::vector<int32_t> query_dims = {batch_size, query_seq_len, num_heads, head_size};
-  std::vector<int32_t> score_dims = {query_seq_len, kv_seq_len};
+  std::vector<int32_t> score_dims = {batch_size, num_heads, query_seq_len, kv_seq_len};
   std::vector<int32_t> kv_cache_dims = {num_layers, batch_size, num_kv_heads,
                                         max_position_embeddings, head_size};
 
