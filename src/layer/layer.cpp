@@ -13,8 +13,8 @@ namespace op {
  * @param data_type Data type used by the layer
  * @param layer_name Name of the layer
  */
-LayerBase::LayerBase(core::DeviceType device_type, LayerType layer_type, core::DataType data_type,
-                     std::string layer_name)
+LayerBase::LayerBase(core::DeviceType device_type, core::LayerType layer_type,
+                     core::DataType data_type, std::string layer_name)
     : m_device_type(device_type),
       m_layer_type(layer_type),
       m_data_type(data_type),
@@ -32,7 +32,7 @@ core::DataType LayerBase::data_type() const { return m_data_type; }
  *
  * @return Layer type
  */
-LayerType LayerBase::layer_type() const { return m_layer_type; }
+core::LayerType LayerBase::layer_type() const { return m_layer_type; }
 
 /**
  * @brief Sets a weight tensor for the layer
@@ -87,7 +87,7 @@ core::DeviceType LayerBase::device_type() const { return m_device_type; }
  */
 void LayerBase::set_device_type(core::DeviceType device_type) { m_device_type = device_type; }
 
-Layer::Layer(core::DeviceType device_type, LayerType layer_type, std::string layer_name)
+Layer::Layer(core::DeviceType device_type, core::LayerType layer_type, std::string layer_name)
     : LayerBase(device_type, layer_type, core::DataType::FP32, std::move(layer_name)) {}
 
 /**
@@ -305,8 +305,8 @@ size_t Layer::input_size() const { return m_inputs.size(); }
  */
 size_t Layer::output_size() const { return m_outputs.size(); }
 
-LayerParam::LayerParam(core::DeviceType device_type, LayerType layer_type, bool is_quant_layer,
-                       std::string layer_name)
+LayerParam::LayerParam(core::DeviceType device_type, core::LayerType layer_type,
+                       bool is_quant_layer, std::string layer_name)
     : Layer(device_type, layer_type, std::move(layer_name)), m_quant_layer(is_quant_layer) {}
 
 /**
