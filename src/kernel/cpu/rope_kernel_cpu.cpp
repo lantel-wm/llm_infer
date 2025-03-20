@@ -21,7 +21,8 @@ namespace kernel {
  *       frequency but different rotations, as per the RoPE formulation
  */
 void sin_cos_cache_calc_cpu(float rope_theta, int head_size, int max_seq_len,
-                            const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache) {
+                            const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
+                            void* stream) {
   float* sin_cache_ptr = const_cast<float*>(sin_cache.ptr<float>());
   float* cos_cache_ptr = const_cast<float*>(cos_cache.ptr<float>());
   for (int pos = 0; pos < max_seq_len; ++pos) {

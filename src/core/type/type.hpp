@@ -42,6 +42,20 @@ inline size_t DataTypeSize(DataType data_type) {
   }
 }
 
+enum class LayerType : uint8_t {
+  Unknown = 0,
+  Linear = 1,
+  Encode = 2,
+  Embedding = 3,
+  RMSNorm = 4,
+  Matmul = 5,
+  RoPe = 6,
+  MHA = 7,
+  Softmax = 8,
+  Add = 9,
+  SwiGLU = 10,
+};
+
 }  // namespace core
 
 #endif  // TYPE_HPP

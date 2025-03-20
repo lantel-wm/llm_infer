@@ -11,28 +11,15 @@
 namespace op {
 
 class Layer;
-enum class LayerType : uint8_t {
-  Unknown = 0,
-  Linear = 1,
-  Encode = 2,
-  Embedding = 3,
-  RMSNorm = 4,
-  Matmul = 5,
-  RoPe = 6,
-  MHA = 7,
-  Softmax = 8,
-  Add = 9,
-  SwiGLU = 10,
-};
 
 class LayerBase {
  public:
-  explicit LayerBase(core::DeviceType device_type, LayerType layer_type, core::DataType data_type,
-                     std::string layer_name = "");
+  explicit LayerBase(core::DeviceType device_type, core::LayerType layer_type,
+                     core::DataType data_type, std::string layer_name = "");
 
   core::DataType data_type() const;
 
-  LayerType layer_type() const;
+  core::LayerType layer_type() const;
 
   virtual core::Status init() = 0;
 
@@ -88,14 +75,15 @@ class LayerBase {
 
  protected:
   std::string m_layer_name;
-  LayerType m_layer_type = LayerType::Unknown;
+  core::LayerType m_layer_type = core::LayerType::Unknown;
   core::DataType m_data_type = core::DataType::Unknown;
   core::DeviceType m_device_type = core::DeviceType::Unknown;
 };
 
 class Layer : public LayerBase {
  public:
-  explicit Layer(core::DeviceType device_type, LayerType layer_type, std::string layer_name = "");
+  explicit Layer(core::DeviceType device_type, core::LayerType layer_type,
+                 std::string layer_name = "");
 
   core::Status init() override;
 
@@ -159,7 +147,7 @@ class Layer : public LayerBase {
 
 class LayerParam : public Layer {
  public:
-  explicit LayerParam(core::DeviceType device_type, LayerType layer_type,
+  explicit LayerParam(core::DeviceType device_type, core::LayerType layer_type,
                       bool is_quant_layer = false, std::string layer_name = "");
 
   size_t weight_size() const;
