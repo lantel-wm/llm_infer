@@ -2,6 +2,7 @@
 #include <armadillo>
 #include <cmath>
 #include "memory_manager.hpp"
+#include "tensor.hpp"
 
 namespace kernel {
 void mha_qkT_kernel_cpu(const tensor::Tensor& query, const tensor::Tensor& key,
@@ -36,8 +37,6 @@ void mha_qkT_kernel_cpu(const tensor::Tensor& query, const tensor::Tensor& key,
     }
   }
 }
-
-#include <armadillo>
 
 void mha_softmax_kernel_cpu(const tensor::Tensor& score) {
   const int32_t query_seq_len = score.get_dim(0);
@@ -78,7 +77,7 @@ void mha_kernel_cpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
   // key_cache_tensor: (num_layers, batch_size, num_kv_heads, seq_len, head_size)
   // value_cache_tensor: (num_layers, batch_size, num_kv_heads, seq_len, head_size)
   // query_tensor, mha_out: (batch_size, seq_len, num_heads, head_size)
-  // score_tensor: (seq_len, seq_len)
+  // score_tensor: (batch_size, num_heads, seq_len, seq_len)
   CHECK((query_seq_len == 1 && kv_seq_len > 1) ||
         (query_seq_len > 1 && query_seq_len == kv_seq_len));
   CHECK(query_tensor.dims_size() == 4);
@@ -119,25 +118,29 @@ void mha_kernel_cpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
       size_t kv_cache_offset = key_cache_tensor.get_offset(layer_idx, batch_idx, kv_head_idx, 0, 0);
       // q[batch_idx, head_idx]: (seq_len, head_size)
       size_t q_offset = query_tensor.get_offset(batch_idx, head_idx, 0, 0);
+      // score[batch_idx, head_idx]
+      size_t score_offset = score_tensor.get_offset(batch_idx, head_idx, 0, 0);
 
       // Create views into the tensor data
       tensor::Tensor query(query_tensor.data_type(), query_seq_len, head_size, false, nullptr,
                            query_tensor.ptr<float>() + q_offset);
       tensor::Tensor key(key_cache_tensor.data_type(), kv_seq_len, head_size, false, nullptr,
                          const_cast<float*>(key_cache_tensor.ptr<float>()) + kv_cache_offset);
+      tensor::Tensor score(score_tensor.data_type(), query_seq_len, kv_seq_len, false, nullptr,
+                           score_tensor.ptr<float>() + score_offset);
       tensor::Tensor value(value_cache_tensor.data_type(), kv_seq_len, head_size, false, nullptr,
                            const_cast<float*>(value_cache_tensor.ptr<float>()) + kv_cache_offset);
       tensor::Tensor output(mha_output.data_type(), query_seq_len, head_size, false, nullptr,
                             mha_output.ptr<float>() + q_offset);
 
       // Step 1: Compute QK^T for attention scores
-      mha_qkT_kernel_cpu(query, key, score_tensor, scale, is_causal);
+      mha_qkT_kernel_cpu(query, key, score, scale, is_causal);
 
       // Step 2: Apply softmax to get attention weights
-      mha_softmax_kernel_cpu(score_tensor);
+      mha_softmax_kernel_cpu(score);
 
       // Step 3: Multiply attention weights with values
-      mha_scorev_kernel_cpu(score_tensor, value, output);
+      mha_scorev_kernel_cpu(score, value, output);
     }
   }
 
