@@ -3,6 +3,21 @@
 #include <cmath>
 
 namespace kernel {
+/**
+ * @brief Applies Root Mean Square Normalization to input tensor on CPU
+ *
+ * This function normalizes the input tensor using RMSNorm:
+ * output = weight * (input / sqrt(mean(input^2) + epsilon))
+ * RMSNorm differs from LayerNorm in that it doesn't subtract the mean and only
+ * normalizes by the root-mean-square of the inputs.
+ *
+ * @param input Input tensor to be normalized
+ * @param weight Weight tensor for element-wise scaling after normalization
+ * @param output Output tensor to store the normalized result
+ * @param stream Unused in CPU implementation but kept for API consistency with GPU version
+ *
+ * @note Both input and weight tensors must have the same shape
+ */
 void rmsnorm_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weight,
                         const tensor::Tensor& output, void* stream) {
   CHECK(!input.is_empty());

@@ -4,6 +4,23 @@
 
 namespace kernel {
 
+/**
+ * @brief CUDA kernel for calculating sine and cosine cache for Rotary Position Embedding
+ *
+ * This kernel precomputes sine and cosine values used in rotary position embeddings (RoPE).
+ * It calculates values for each position up to max_seq_len using frequencies that
+ * decay exponentially with the dimension index. These cached values are later used
+ * for efficient rotation of query and key vectors during attention computation.
+ *
+ * @param rope_theta Base value for frequency calculation (typically 10000.0)
+ * @param head_size Size of each attention head
+ * @param max_seq_len Maximum sequence length to precompute embeddings for
+ * @param sin_cache Output array for sine values [max_seq_len, head_size]
+ * @param cos_cache Output array for cosine values [max_seq_len, head_size]
+ *
+ * @note The kernel processes the head_size in pairs, computing values for
+ *       dimensions (2i, 2i+1) with the same frequency as per the RoPE formulation
+ */
 __global__ void sin_cos_cache_calc_gpu_fp32(float rope_theta, int head_size, int max_seq_len,
                                             float* sin_cache, float* cos_cache) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -26,6 +43,30 @@ __global__ void sin_cos_cache_calc_gpu_fp32(float rope_theta, int head_size, int
   }
 }
 
+/**
+ * @brief CUDA kernel for applying Rotary Position Embedding (RoPE) to query and key tensors
+ *
+ * This kernel applies rotary position embeddings to query and key tensors by rotating
+ * vector components in 2D subspaces based on token positions. This allows the model to
+ * be aware of relative positions without requiring explicit position embeddings to be added.
+ * The implementation is optimized for processing multiple batches, positions, and heads in
+ * parallel.
+ *
+ * @param positions Array of position indices
+ * @param batch_size Number of sequences in the batch
+ * @param seq_len Length of each sequence
+ * @param hidden_size Total dimension of query tensor (num_q_heads * head_size)
+ * @param key_value_size Total dimension of key tensor (num_k_heads * head_size)
+ * @param head_size Size of each attention head
+ * @param input_q Query tensor [batch_size, seq_len, num_q_heads, head_size]
+ * @param input_k Key tensor [batch_size, seq_len, num_k_heads, head_size]
+ * @param sin_cache Precomputed sine values [max_seq_len, head_size]
+ * @param cos_cache Precomputed cosine values [max_seq_len, head_size]
+ *
+ * @note The kernel handles grouped-query attention where num_q_heads may be larger than
+ * num_k_heads. It applies rotations in-place, modifying input_q and input_k directly. Each thread
+ * processes one (head, pair) combination.
+ */
 __global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size, const int seq_len,
                                      const int hidden_size, const int key_value_size,
                                      const int head_size, float* input_q, float* input_k,
@@ -80,6 +121,23 @@ __global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size,
   }
 }
 
+/**
+ * @brief Computes sine and cosine cache for Rotary Position Embedding on GPU
+ *
+ * This function launches a CUDA kernel to precalculate sine and cosine values
+ * for rotary position embeddings. These precomputed values are used during
+ * inference to efficiently rotate query and key vectors.
+ *
+ * @param rope_theta Base value for frequency calculation (typically 10000.0)
+ * @param head_size Size of each attention head
+ * @param max_seq_len Maximum sequence length to precompute embeddings for
+ * @param sin_cache Output tensor to store sine values [max_seq_len, head_size]
+ * @param cos_cache Output tensor to store cosine values [max_seq_len, head_size]
+ * @param stream Optional CUDA stream for asynchronous execution
+ *
+ * @note The function launches a kernel with grid dimensions optimized for the
+ *       head_size, with each thread handling a pair of dimensions
+ */
 void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
                             cudaStream_t stream) {
@@ -99,6 +157,26 @@ void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
   }
 }
 
+/**
+ * @brief Applies Rotary Position Embedding (RoPE) to query and key tensors on GPU
+ *
+ * This function launches a CUDA kernel to apply rotary position embeddings to
+ * the query and key tensors used in attention mechanisms. It uses a 3D grid to
+ * efficiently process multiple batches, positions, and heads in parallel.
+ *
+ * @param hidden_size Total dimension of query tensor (num_q_heads * head_size)
+ * @param key_value_size Total dimension of key tensor (num_k_heads * head_size)
+ * @param head_size Size of each attention head
+ * @param input_q Query tensor [batch_size, seq_len, num_q_heads, head_size]
+ * @param input_k Key tensor [batch_size, seq_len, num_k_heads, head_size]
+ * @param input_pos Position indices tensor
+ * @param sin_cache Precomputed sine values [max_seq_len, head_size]
+ * @param cos_cache Precomputed cosine values [max_seq_len, head_size]
+ * @param stream Optional CUDA stream for asynchronous execution
+ *
+ * @note The function supports grouped-query attention where the number of query heads
+ *       may be larger than the number of key-value heads
+ */
 void rope_kernel_gpu(int32_t hidden_size, int32_t key_value_size, int32_t head_size,
                      const tensor::Tensor& input_q, const tensor::Tensor& input_k,
                      const tensor::Tensor& input_pos, const tensor::Tensor& sin_cache,

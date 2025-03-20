@@ -3,6 +3,26 @@
 
 namespace kernel {
 
+/**
+ * @brief Performs embedding lookup operation on CPU
+ *
+ * This function takes token indices from the input tensor and retrieves the corresponding
+ * embedding vectors from the weight tensor. The retrieved embeddings are copied to the
+ * output tensor. This is the first operation in many NLP models, converting token IDs
+ * to dense vector representations.
+ *
+ * @param input Input tensor containing token indices
+ * @param weight Weight tensor containing embedding vectors for the vocabulary
+ * @param output Output tensor to store the retrieved embedding vectors
+ * @param vocab_size Size of the vocabulary (maximum allowed token index)
+ * @param stream Unused in CPU implementation but kept for API consistency with GPU version
+ *
+ * @note The function expects:
+ *       - input tensor to contain int32_t token indices
+ *       - weight tensor to have shape [vocab_size, embedding_dim]
+ *       - output tensor to have enough space to store embeddings for all input tokens
+ *       - all token indices to be less than vocab_size
+ */
 void embedding_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weight,
                           const tensor::Tensor& output, int32_t vocab_size, void* stream) {
   CHECK(!input.is_empty());

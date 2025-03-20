@@ -3,6 +3,21 @@
 
 namespace kernel {
 
+/**
+ * @brief CUDA kernel for matrix multiplication of float arrays
+ *
+ * This GPU kernel performs matrix multiplication between two matrices:
+ * C = scale * (A * B)
+ * Each thread computes one element of the output matrix.
+ *
+ * @param input Input matrix A of size M×K (row-major)
+ * @param weight Weight matrix B of size K×N (row-major)
+ * @param output Output matrix C of size M×N (row-major)
+ * @param scale Scaling factor applied to the result
+ * @param M Number of rows in A and C
+ * @param K Number of columns in A and rows in B
+ * @param N Number of columns in B and C
+ */
 __global__ void matmul_kernel_gpu_fp32(const float* input, const float* weight, float* output,
                                        float scale, int M, int K, int N) {
   // Calculate global row and column indices
@@ -23,6 +38,22 @@ __global__ void matmul_kernel_gpu_fp32(const float* input, const float* weight, 
   }
 }
 
+/**
+ * @brief Performs matrix multiplication between input and weight tensors on GPU
+ *
+ * This function launches a CUDA kernel to multiply the input tensor by the weight tensor
+ * and applies an optional scaling factor. It handles different input tensor dimensions
+ * (1D or 2D) and configures the grid and block dimensions for efficient execution.
+ *
+ * @param input Input tensor (1D or 2D)
+ * @param weight Weight tensor (must be 2D)
+ * @param output Output tensor to store the result
+ * @param scale Scaling factor applied to the multiplication result
+ * @param stream Optional CUDA stream for asynchronous execution
+ *
+ * @note If input is 1D, it's treated as a single row. If 2D, each row is processed independently.
+ *       The function checks dimension compatibility: input.dim1 must equal weight.dim0
+ */
 void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight,
                        const tensor::Tensor& output, float scale, void* stream) {
   CHECK(!input.is_empty());
