@@ -140,7 +140,7 @@ __global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size,
  */
 void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
-                            cudaStream_t stream) {
+                            void* stream) {
   CHECK_EQ(sin_cache.is_empty(), false);
   CHECK_EQ(cos_cache.is_empty(), false);
   int block_size = 256;
@@ -151,7 +151,8 @@ void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
         rope_theta, head_size, max_seq_len, const_cast<float*>(sin_cache.ptr<float>()),
         const_cast<float*>(cos_cache.ptr<float>()));
   } else {
-    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size, 0, stream>>>(
+    cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
+    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
         rope_theta, head_size, max_seq_len, const_cast<float*>(sin_cache.ptr<float>()),
         const_cast<float*>(cos_cache.ptr<float>()));
   }

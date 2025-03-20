@@ -5,6 +5,6 @@
 
 namespace kernel {
 void swiglu_kernel_cpu(const tensor::Tensor& input1, const tensor::Tensor& input2,
-                       const tensor::Tensor& output, void* stream);
+                       const tensor::Tensor& output, void* stream = nullptr);
 }  // namespace kernel
 #endif  // SWIGLU_KERNEL_CPU_HPP
