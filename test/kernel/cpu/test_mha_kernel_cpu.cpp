@@ -81,8 +81,8 @@ TEST_F(MhaKernelTest, MhaQkT) {
   // Compute scaling factor (1/sqrt(head_size))
   float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
 
-  // Run the MHA matmul kernel
-  mha_qkT_kernel_cpu(query, key, score, scale);
+  // Run the MHA matmul kernel without causal mask
+  mha_qkT_kernel_cpu(query, key, score, scale, false);
 
   // Verify results
   // Manually compute expected qkT matrix for verification
@@ -102,6 +102,26 @@ TEST_F(MhaKernelTest, MhaQkT) {
     EXPECT_NEAR(score.index<float>(i), expected_score[i], 1e-4f)
         << "Mismatch at index " << i << " (row=" << (i / seq_len) << ", col=" << (i % seq_len)
         << ")";
+  }
+
+  // Test with causal masking
+  tensor::Tensor causal_score(core::DataType::FP32, seq_len, seq_len, true, cpu_memory_manager);
+  mha_qkT_kernel_cpu(query, key, causal_score, scale, true);
+
+  // Verify causal masking is properly applied
+  for (int i = 0; i < seq_len; i++) {
+    for (int j = 0; j < seq_len; j++) {
+      if (j > i) {
+        // Upper triangular elements should be -infinity
+        EXPECT_EQ(causal_score.at<float>(i, j), -std::numeric_limits<float>::infinity())
+            << "Upper triangular element at (" << i << ", " << j << ") is not masked";
+      } else {
+        // Lower triangular elements should match the non-causal computation
+        EXPECT_NEAR(causal_score.at<float>(i, j), expected_score[i * seq_len + j], 1e-4f)
+            << "Lower triangular element at (" << i << ", " << j
+            << ") doesn't match expected value";
+      }
+    }
   }
 }
 
@@ -222,8 +242,22 @@ TEST_F(MhaKernelTest, MhaScoreV) {
 
 #ifndef PYTORCH_NOT_FOUND
 // Test softmax against PyTorch implementation
-TEST_F(MhaKernelTest, MhaFull) {
-  // Create Python script for generating test data
+struct MhaTestParams {
+  int batch_size;
+  int query_seq_len;
+  int kv_seq_len;
+  int hidden_size;
+  int num_heads;
+  int num_kv_heads;
+  std::string test_name;
+};
+
+class MhaFullTest : public MhaKernelTest, public ::testing::WithParamInterface<MhaTestParams> {};
+
+TEST_P(MhaFullTest, CompareWithPyTorch) {
+  const auto params = GetParam();
+
+  // Create Python script for generating test data with current configuration
   {
     std::ofstream py_file("generate_mha_data.py");
     py_file << R"(
@@ -231,25 +265,32 @@ import torch
 
 torch.manual_seed(42)
 
-batch_size = 2
-seq_len = 4
-hidden_size = 512
-num_heads = 8
-num_kv_heads = 4
+batch_size = )"
+            << params.batch_size << R"(
+query_seq_len = )"
+            << params.query_seq_len << R"(
+kv_seq_len = )"
+            << params.kv_seq_len << R"(
+hidden_size = )"
+            << params.hidden_size << R"(
+num_heads = )"
+            << params.num_heads << R"(
+num_kv_heads = )"
+            << params.num_kv_heads << R"(
 head_size = hidden_size // num_heads
 kv_size = num_kv_heads * head_size
 
-query = torch.randn(batch_size, seq_len, num_heads, head_size, dtype=torch.float32)
-key = torch.randn(batch_size, seq_len, num_kv_heads, head_size, dtype=torch.float32)
-value = torch.randn(batch_size, seq_len, num_kv_heads, head_size, dtype=torch.float32)
+query = torch.randn(batch_size, query_seq_len, num_heads, head_size, dtype=torch.float32)
+key = torch.randn(batch_size, kv_seq_len, num_kv_heads, head_size, dtype=torch.float32)
+value = torch.randn(batch_size, kv_seq_len, num_kv_heads, head_size, dtype=torch.float32)
 
 heads_per_kv = num_heads // num_kv_heads
 key_rep = key.repeat_interleave(heads_per_kv, dim=2)
 value_rep = value.repeat_interleave(heads_per_kv, dim=2)
 
-query_input = query.view(batch_size, seq_len, hidden_size)
-key_input = key_rep.view(batch_size, seq_len, hidden_size)
-value_input = value_rep.view(batch_size, seq_len, hidden_size)
+query_input = query.view(batch_size, query_seq_len, hidden_size)
+key_input = key_rep.view(batch_size, kv_seq_len, hidden_size)
+value_input = value_rep.view(batch_size, kv_seq_len, hidden_size)
 
 mha = torch.nn.MultiheadAttention(embed_dim=hidden_size, num_heads=num_heads,dropout=0.0, batch_first=True, bias=False, dtype=torch.float32)
 
@@ -259,8 +300,18 @@ outproj_weight = torch.nn.Parameter(torch.eye(hidden_size, hidden_size))
 mha.in_proj_weight = inproj_weight
 mha.out_proj.weight = outproj_weight
 
-output = mha(query_input, key_input, value_input)[0]
-output = output.view(batch_size, seq_len, num_heads, head_size)
+if query_seq_len > 1 and query_seq_len == kv_seq_len:
+    is_causal = True
+    attn_mask = torch.triu(
+        torch.ones(query_seq_len, kv_seq_len, dtype=torch.float32), 
+        diagonal=1
+    ).bool()
+else:
+    is_causal = False
+    attn_mask = None
+
+output = mha(query_input, key_input, value_input, is_causal=is_causal, attn_mask=attn_mask)[0]
+output = output.view(batch_size, query_seq_len, num_heads, head_size)
 
 query.numpy().tofile('mha_query.bin')
 key.numpy().tofile('mha_key.bin')
@@ -273,34 +324,37 @@ output.detach().numpy().tofile('mha_output.bin')
   // Run Python script to generate test data
   ASSERT_EQ(std::system("python3 generate_mha_data.py"), 0) << "Failed to run Python script";
 
-  // Load PyTorch-generated data
-  const int32_t batch_size = 2;
-  const int32_t seq_len = 4;
-  const int32_t num_heads = 8;
-  const int32_t num_kv_heads = 4;
-  const int32_t head_size = 64;
-  const int32_t hidden_size = num_heads * head_size;
+  // Load configuration from params
+  const int32_t batch_size = params.batch_size;
+  const int32_t query_seq_len = params.query_seq_len;
+  const int32_t kv_seq_len = params.kv_seq_len;
+  const int32_t num_heads = params.num_heads;
+  const int32_t num_kv_heads = params.num_kv_heads;
+  const int32_t hidden_size = params.hidden_size;
+  const int32_t head_size = hidden_size / num_heads;
   const int32_t layer_idx = 0;
   const int32_t num_layers = 1;
+  const int32_t max_position_embeddings = 128;  // Increased for longer sequences
 
   // Read PyTorch generated data
   std::vector<float> query_data =
-      read_binary_file("mha_query.bin", batch_size * seq_len * num_heads * head_size);
+      read_binary_file("mha_query.bin", batch_size * query_seq_len * num_heads * head_size);
   std::vector<float> key_data =
-      read_binary_file("mha_key.bin", batch_size * seq_len * num_kv_heads * head_size);
+      read_binary_file("mha_key.bin", batch_size * kv_seq_len * num_kv_heads * head_size);
   std::vector<float> value_data =
-      read_binary_file("mha_value.bin", batch_size * seq_len * num_kv_heads * head_size);
+      read_binary_file("mha_value.bin", batch_size * kv_seq_len * num_kv_heads * head_size);
   std::vector<float> torch_output =
-      read_binary_file("mha_output.bin", batch_size * seq_len * hidden_size);
+      read_binary_file("mha_output.bin", batch_size * query_seq_len * hidden_size);
 
   // Create tensor shapes
-  std::vector<int32_t> query_dims = {batch_size, seq_len, num_heads, head_size};
-  std::vector<int32_t> score_dims = {seq_len, seq_len};
-  std::vector<int32_t> kv_cache_dims = {num_layers, batch_size, num_kv_heads, seq_len, head_size};
+  std::vector<int32_t> query_dims = {batch_size, query_seq_len, num_heads, head_size};
+  std::vector<int32_t> score_dims = {query_seq_len, kv_seq_len};
+  std::vector<int32_t> kv_cache_dims = {num_layers, batch_size, num_kv_heads,
+                                        max_position_embeddings, head_size};
 
   // Create tensors
   tensor::Tensor query(core::DataType::FP32, query_dims, true, cpu_memory_manager);
-  tensor::Tensor mha_out(core::DataType::FP32, query_dims, true, cpu_memory_manager);
+  tensor::Tensor mha_output(core::DataType::FP32, query_dims, true, cpu_memory_manager);
   tensor::Tensor score(core::DataType::FP32, score_dims, true, cpu_memory_manager);
   tensor::Tensor key_cache(core::DataType::FP32, kv_cache_dims, true, cpu_memory_manager);
   tensor::Tensor value_cache(core::DataType::FP32, kv_cache_dims, true, cpu_memory_manager);
@@ -315,10 +369,10 @@ output.detach().numpy().tofile('mha_output.bin')
   // Need to reshape to [num_layers, batch_size, num_kv_heads, seq_len, head_size]
   for (int l = 0; l < num_layers; l++) {
     for (int b = 0; b < batch_size; b++) {
-      for (int s = 0; s < seq_len; s++) {
+      for (int s = 0; s < kv_seq_len; s++) {
         for (int n = 0; n < num_kv_heads; n++) {
           for (int h = 0; h < head_size; h++) {
-            int pytorch_idx = ((b * seq_len + s) * num_kv_heads + n) * head_size + h;
+            int pytorch_idx = ((b * kv_seq_len + s) * num_kv_heads + n) * head_size + h;
             key_cache.at<float>(l, b, n, s, h) = key_data[pytorch_idx];
             value_cache.at<float>(l, b, n, s, h) = value_data[pytorch_idx];
           }
@@ -328,25 +382,51 @@ output.detach().numpy().tofile('mha_output.bin')
   }
 
   // Run MHA kernel
-  mha_kernel_cpu(num_heads, layer_idx, mha_out, query, score, key_cache, value_cache);
+  mha_kernel_cpu(layer_idx, num_layers, batch_size, query_seq_len, kv_seq_len, mha_output, query,
+                 score, key_cache, value_cache);
 
   // Compare results with PyTorch
   float max_diff = 0.0f;
   float sum_squared_diff = 0.0f;
 
-  for (int i = 0; i < mha_out.size(); i++) {
-    float diff = std::abs(mha_out.index<float>(i) - torch_output[i]);
+  for (int i = 0; i < mha_output.size(); i++) {
+    float diff = std::abs(mha_output.index<float>(i) - torch_output[i]);
     max_diff = std::max(max_diff, diff);
     sum_squared_diff += diff * diff;
   }
 
-  float rmse = std::sqrt(sum_squared_diff / mha_out.size());
+  float rmse = std::sqrt(sum_squared_diff / mha_output.size());
 
   // We expect some numerical differences due to implementation details,
   // so we use a higher tolerance for the comparison
   EXPECT_LT(rmse, 1e-5f) << "RMSE too high compared to PyTorch implementation";
   EXPECT_LT(max_diff, 1e-4f) << "Max difference too high compared to PyTorch implementation";
 }
+
+// Generate different test configurations
+INSTANTIATE_TEST_SUITE_P(MhaVariations, MhaFullTest,
+                         ::testing::Values(
+                             // Multi-head attention prefill
+                             MhaTestParams{1, 8, 8, 512, 8, 8, "MHAPrefill"},
+                             // Multi-head attention Decode
+                             MhaTestParams{1, 1, 8, 512, 8, 8, "MHADecode"},
+                             // Larger batch multi-head attention decode
+                             MhaTestParams{4, 1, 8, 512, 8, 8, "LargerBatchMHADecode"},
+                             // Multi-query attention (MQA) prefill
+                             MhaTestParams{2, 8, 8, 512, 8, 1, "MQAPrefill"},
+                             // Multi-query attention (MQA) decode
+                             MhaTestParams{1, 1, 8, 512, 8, 1, "MQADecode"},
+                             // Larger batch multi-query attention decode
+                             MhaTestParams{4, 1, 8, 512, 8, 1, "LargerBatchMQADecode"},
+                             // Grouped-query attention (GQA) prefill
+                             MhaTestParams{2, 8, 8, 512, 8, 2, "GQAPrefill"},
+                             // Grouped-query attention (GQA) decode
+                             MhaTestParams{1, 1, 8, 512, 8, 2, "GQADecode"},
+                             // Larger batch grouped-query attention decode
+                             MhaTestParams{4, 1, 8, 512, 8, 2, "LargerBatchGQADecode"}),
+                         [](const ::testing::TestParamInfo<MhaTestParams>& info) {
+                           return info.param.test_name;
+                         });
 #endif
 
 }  // namespace
