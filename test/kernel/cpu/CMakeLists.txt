@@ -36,6 +36,7 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/src/core
         ${CMAKE_SOURCE_DIR}/src/core/memory
+        ${CMAKE_SOURCE_DIR}/src/core/config
         ${CUDAToolkit_INCLUDE_DIRS}
         ${glog_SOURCE_DIR}/src
         ${glog_BINARY_DIR}

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <cstring>
+#include <memory>
 #include <vector>
 #include "add_kernel_gpu.cuh"
 #include "tensor.hpp"

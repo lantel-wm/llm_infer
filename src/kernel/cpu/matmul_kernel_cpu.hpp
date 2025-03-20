@@ -1,6 +1,7 @@
 #ifndef MATMUL_KERNEL_CPU_HPP
 #define MATMUL_KERNEL_CPU_HPP
 
+#include "config.hpp"
 #include "tensor.hpp"
 
 namespace kernel {

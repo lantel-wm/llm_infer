@@ -384,25 +384,24 @@ void mha_kernel_gpu(int32_t layer_idx, int32_t num_layers, int32_t batch_size,
   dim3 grid_size(num_heads, batch_size);
   //   dim3 block_size(16, 16);
 
-  if (!stream) {
+  if (stream) {
+    auto stream_ = static_cast<cudaStream_t>(stream);
+    if (is_prefill) {
+      multi_head_attention_kernel_fp32<<<grid_size, block_size, 0, stream_>>>(
+          batch_size, query_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
+          head_size, query, score, output, key_cache, value_cache);
+    } else {
+      decoding_attention_kernel_fp32<<<grid_size, block_size, 0, stream_>>>(
+          batch_size, kv_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
+          head_size, query, score, output, key_cache, value_cache);
+    }
+  } else {
     if (is_prefill) {
       multi_head_attention_kernel_fp32<<<grid_size, block_size>>>(
           batch_size, query_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
           head_size, query, score, output, key_cache, value_cache);
     } else {
       decoding_attention_kernel_fp32<<<grid_size, block_size>>>(
-          batch_size, kv_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
-          head_size, query, score, output, key_cache, value_cache);
-    }
-  } else {
-    if (is_prefill) {
-      cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
-      multi_head_attention_kernel_fp32<<<grid_size, block_size, 0, stream_>>>(
-          batch_size, query_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
-          head_size, query, score, output, key_cache, value_cache);
-    } else {
-      cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
-      decoding_attention_kernel_fp32<<<grid_size, block_size, 0, stream_>>>(
           batch_size, kv_seq_len, max_position_embedding, num_heads, num_kv_heads, kv_mul,
           head_size, query, score, output, key_cache, value_cache);
     }

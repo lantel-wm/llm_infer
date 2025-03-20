@@ -1,6 +1,7 @@
 #ifndef EMBEDDING_KERNEL_CPU
 #define EMBEDDING_KERNEL_CPU
 
+#include "config.hpp"
 #include "tensor.hpp"
 
 namespace kernel {
