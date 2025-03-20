@@ -100,7 +100,7 @@ void rmsnorm_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weigh
   float* out_ptr = const_cast<float*>(output.ptr<float>());
   constexpr int threads_num = 128;
   if (stream) {
-    cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
+    auto stream_ = static_cast<cudaStream_t>(stream);
     row_rmsnorm_f32<128><<<1, threads_num, 0, stream_>>>(in_ptr, wei_ptr, out_ptr, size, eps);
   } else {
     row_rmsnorm_f32<128><<<1, threads_num>>>(in_ptr, wei_ptr, out_ptr, size, eps);

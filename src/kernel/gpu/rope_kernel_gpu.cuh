@@ -11,7 +11,7 @@ void rope_kernel_gpu(int32_t hidden_size, int32_t key_value_size, int32_t head_s
 
 void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
-                            cudaStream_t stream);
+                            void* stream);
 
 }  // namespace kernel
 #endif  // ROPE_KERNEL_GPU_CUH

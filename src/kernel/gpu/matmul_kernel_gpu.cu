@@ -91,15 +91,16 @@ void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight
   dim3 block_dim(16, 16);
   dim3 grid_dim((N + block_dim.x - 1) / block_dim.x, (M + block_dim.y - 1) / block_dim.y);
 
-  if (!stream) {
-    matmul_kernel_gpu_fp32<<<grid_dim, block_dim>>>(input.ptr<float>(), weight.ptr<float>(),
-                                                    const_cast<float*>(output.ptr<float>()), scale,
-                                                    M, K, N);
-  } else {
-    cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
+  if (stream) {
+    auto stream_ = static_cast<cudaStream_t>(stream);
     matmul_kernel_gpu_fp32<<<grid_dim, block_dim, 0, stream_>>>(
         input.ptr<float>(), weight.ptr<float>(), const_cast<float*>(output.ptr<float>()), scale, M,
         K, N);
+
+  } else {
+    matmul_kernel_gpu_fp32<<<grid_dim, block_dim>>>(input.ptr<float>(), weight.ptr<float>(),
+                                                    const_cast<float*>(output.ptr<float>()), scale,
+                                                    M, K, N);
   }
 }
 

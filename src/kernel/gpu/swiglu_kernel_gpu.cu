@@ -63,11 +63,11 @@ void swiglu_kernel_gpu(const tensor::Tensor& input1, const tensor::Tensor& input
   float* in1_ptr = const_cast<float*>(input1.ptr<float>());
   float* in2_ptr = const_cast<float*>(input2.ptr<float>());
   float* out_ptr = const_cast<float*>(output.ptr<float>());
-  if (!stream) {
-    swiglu_kernel_gpu_fp32<<<grid_size, block_size>>>(size, in1_ptr, in2_ptr, out_ptr);
-  } else {
-    cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
+  if (stream) {
+    auto stream_ = static_cast<cudaStream_t>(stream);
     swiglu_kernel_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(size, in1_ptr, in2_ptr, out_ptr);
+  } else {
+    swiglu_kernel_gpu_fp32<<<grid_size, block_size>>>(size, in1_ptr, in2_ptr, out_ptr);
   }
 }
 }  // namespace kernel

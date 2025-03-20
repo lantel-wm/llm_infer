@@ -140,18 +140,19 @@ __global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size,
  */
 void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
-                            cudaStream_t stream) {
+                            void* stream) {
   CHECK_EQ(sin_cache.is_empty(), false);
   CHECK_EQ(cos_cache.is_empty(), false);
   int block_size = 256;
   int grid_size = (head_size / 2 + block_size - 1) / block_size;
 
-  if (!stream) {
-    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size>>>(
+  if (stream) {
+    auto stream_ = static_cast<cudaStream_t>(stream);
+    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
         rope_theta, head_size, max_seq_len, const_cast<float*>(sin_cache.ptr<float>()),
         const_cast<float*>(cos_cache.ptr<float>()));
   } else {
-    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size, 0, stream>>>(
+    sin_cos_cache_calc_gpu_fp32<<<grid_size, block_size>>>(
         rope_theta, head_size, max_seq_len, const_cast<float*>(sin_cache.ptr<float>()),
         const_cast<float*>(cos_cache.ptr<float>()));
   }
@@ -197,13 +198,13 @@ void rope_kernel_gpu(int32_t hidden_size, int32_t key_value_size, int32_t head_s
   float* input_q_ptr = const_cast<float*>(input_q.ptr<float>());
   float* input_k_ptr = const_cast<float*>(input_k.ptr<float>());
 
-  if (!stream) {
-    rope_kernel_gpu_fp32<<<grid_size, block_size>>>(
+  if (stream) {
+    auto stream_ = static_cast<cudaStream_t>(stream);
+    rope_kernel_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
         pos_ptr, batch_size, seq_len, hidden_size, key_value_size, head_size, input_q_ptr,
         input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
   } else {
-    cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
-    rope_kernel_gpu_fp32<<<grid_size, block_size, 0, cuda_stream>>>(
+    rope_kernel_gpu_fp32<<<grid_size, block_size>>>(
         pos_ptr, batch_size, seq_len, hidden_size, key_value_size, head_size, input_q_ptr,
         input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
   }

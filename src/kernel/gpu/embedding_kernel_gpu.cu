@@ -84,7 +84,7 @@ void embedding_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& wei
   float* wei_ptr = const_cast<float*>(weight.ptr<float>());
   float* out_ptr = const_cast<float*>(output.ptr<float>());
   if (stream) {
-    cudaStream_t stream_ = static_cast<cudaStream_t>(stream);
+    auto stream_ = static_cast<cudaStream_t>(stream);
     embedding_kernel_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
         vocab_size, token_num, embedding_dim, in_ptr, wei_ptr, out_ptr);
   } else {

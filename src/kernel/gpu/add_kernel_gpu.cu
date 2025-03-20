@@ -1,3 +1,5 @@
+#include <cuda.h>
+#include <driver_types.h>
 #include "add_kernel_gpu.cuh"
 
 namespace kernel {
@@ -48,7 +50,7 @@ void add_kernel_gpu(const tensor::Tensor& input1, const tensor::Tensor& input2,
   int32_t block_size = 512;
   int32_t grid_size = (size + block_size - 1) / block_size;
   if (stream) {
-    cudaStream_t stream_ = static_cast<CUstream_st*>(stream);
+    auto stream_ = static_cast<cudaStream_t>(stream);
     add_kernel_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
         size, input1.ptr<float>(), input2.ptr<float>(), const_cast<float*>(output.ptr<float>()));
   } else {
