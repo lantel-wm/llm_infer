@@ -54,7 +54,7 @@ TEST_F(EmbeddingLayerTest, CPU) {
   // Create input tensor with token indices
   tensor::Tensor input_tokens_tensor(core::DataType::INT32, input_tokens.size(), true,
                                      cpu_memory_manager, nullptr);
-  tensor::Tensor input_token_num(core::DataType::INT32, static_cast<int32_t>(input_tokens.size()));
+  tensor::Tensor input_token_num = tensor::make_scalar<int32_t>(seq_len, cpu_memory_manager);
 
   // Create weight tensor (embedding table)
   tensor::Tensor weight_tensor(core::DataType::FP32, vocab_size, dim, true, cpu_memory_manager,
@@ -112,7 +112,7 @@ TEST_F(EmbeddingLayerTest, GPU) {
   tensor::Tensor input_tokens_tensor(core::DataType::INT32, input_tokens.size(), true,
                                      cpu_memory_manager, nullptr);
   // Create input_token_num tensor, used as a scalar
-  tensor::Tensor input_token_num(core::DataType::INT32, static_cast<int32_t>(input_tokens.size()));
+  tensor::Tensor input_token_num = tensor::make_scalar<int32_t>(seq_len, cpu_memory_manager);
 
   // Create weight tensor (embedding table)
   tensor::Tensor weight_tensor(core::DataType::FP32, vocab_size, dim, true, cpu_memory_manager,
