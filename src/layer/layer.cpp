@@ -154,7 +154,9 @@ core::Status Layer::check_tensor_with_dim(const tensor::Tensor& tensor,
   for (int32_t i = 0; i < dims; ++i) {
     int32_t dim = va_arg(args, int32_t);
     if (dim != tensor.get_dim(i)) {
-      return core::error::InvalidArgument("The tensor has a wrong dim in dim" + std::to_string(i));
+      return core::error::InvalidArgument("The tensor has a wrong dim in dim" + std::to_string(i) +
+                                          ", expected " + std::to_string(dim) + " but got " +
+                                          std::to_string(tensor.get_dim(i)));
     }
   }
   va_end(args);
