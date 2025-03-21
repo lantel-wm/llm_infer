@@ -39,7 +39,7 @@ void softmax_kernel_cpu(const tensor::Tensor& input, void* stream) {
  *
  * @note The function modifies the input array in-place
  */
-void softmax_kernel_cpu(const float* input_ptr, size_t size) {
+void softmax_kernel_cpu(const float* input_ptr, int32_t size) {
   tensor::Tensor input(core::DataType::FP32, size);
   std::shared_ptr<core::Buffer> buffer =
       std::make_shared<core::Buffer>(size * sizeof(float), nullptr, (void*)input_ptr, true);

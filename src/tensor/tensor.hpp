@@ -15,6 +15,10 @@ class Tensor {
  public:
   explicit Tensor() = default;
 
+  explicit Tensor(core::DataType data_type, bool need_alloc = false,
+                  std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
+                  void* ptr = nullptr);
+
   explicit Tensor(core::DataType data_type, int32_t dim0, bool need_alloc = false,
                   std::shared_ptr<core::MemoryManager> memory_manager = nullptr,
                   void* ptr = nullptr);
@@ -106,6 +110,20 @@ class Tensor {
   void transpose(int32_t axis0, int32_t axis1);
 
   tensor::Tensor clone() const;
+
+  bool is_scalar() const;
+
+  template <typename T>
+  T scalar_value() const;
+
+  template <typename T>
+  void set_scalar_value(const T& value);
+
+  // Cast operator for scalar tensors
+  template <typename T>
+  operator T() const {
+    return scalar_value<T>();
+  }
 
  private:
   size_t m_size = 0;
@@ -383,6 +401,103 @@ void Tensor::transpose(int32_t axis0, int32_t axis1) {
   update_strides();
   m_buffer->copy_from(transposed.get_buffer().get());
 }
+
+/**
+ * @brief Checks if this tensor is a scalar (rank-0 tensor)
+ *
+ * A scalar tensor has exactly one element. This can be either:
+ * - A rank-0 tensor with no dimensions
+ * - A rank-1 tensor with a single dimension of size 1 (shape [1])
+ *
+ * @return True if the tensor is a scalar, false otherwise
+ */
+inline bool Tensor::is_scalar() const {
+  return size() == 1 && (m_dims.empty() || (m_dims.size() == 1 && m_dims[0] == 1));
+}
+
+/**
+ * @brief Gets the scalar value of this tensor
+ *
+ * This method returns the single value stored in a scalar tensor.
+ * It is only valid to call this method on a scalar tensor.
+ *
+ * @tparam T Type to cast the scalar value to
+ * @return The scalar value
+ */
+template <typename T>
+T Tensor::scalar_value() const {
+  CHECK(is_scalar()) << "Tensor is not a scalar";
+  CHECK(m_buffer && m_buffer->ptr()) << "Buffer is not allocated";
+  return *reinterpret_cast<const T*>(m_buffer->ptr());
+}
+
+/**
+ * @brief Sets the scalar value of this tensor
+ *
+ * This method sets the single value stored in a scalar tensor.
+ * It is only valid to call this method on a scalar tensor.
+ *
+ * @tparam T Type of the value to set
+ * @param value The value to set
+ */
+template <typename T>
+void Tensor::set_scalar_value(const T& value) {
+  CHECK(is_scalar()) << "Tensor is not a scalar";
+  CHECK(m_buffer && m_buffer->ptr()) << "Buffer is not allocated";
+  *reinterpret_cast<T*>(m_buffer->ptr()) = value;
+}
+
+// Forward declarations for utility functions
+template <typename T>
+Tensor make_scalar(T value, std::shared_ptr<core::MemoryManager> memory_manager = nullptr);
+
+bool is_scalar_compatible(const Tensor& tensor);
+
+/**
+ * @brief Creates a scalar tensor from a value
+ *
+ * Utility function to create a scalar tensor containing a single value.
+ *
+ * @tparam T Type of the scalar value
+ * @param value The value to store in the scalar tensor
+ * @param memory_manager Memory manager for allocation
+ * @return A scalar tensor containing the value
+ */
+template <typename T>
+Tensor make_scalar(T value, std::shared_ptr<core::MemoryManager> memory_manager) {
+  core::DataType data_type;
+
+  // Determine the appropriate data type based on T
+  if constexpr (std::is_same_v<T, float>) {
+    data_type = core::DataType::FP32;
+  } else if constexpr (std::is_same_v<T, int8_t>) {
+    data_type = core::DataType::INT8;
+  } else if constexpr (std::is_same_v<T, int32_t>) {
+    data_type = core::DataType::INT32;
+  } else {
+    static_assert(sizeof(T) == 0, "Unsupported data type for scalar tensor");
+  }
+
+  // Create and allocate the scalar tensor
+  Tensor scalar(data_type, true, memory_manager);
+
+  // Set the scalar value
+  scalar.set_scalar_value<T>(value);
+
+  return scalar;
+}
+
+/**
+ * @brief Checks if a tensor can be treated as a scalar
+ *
+ * A tensor is scalar-compatible if it has exactly one element.
+ * This can be either a proper scalar (rank-0) or a tensor with
+ * dimensions like [1], [1,1], etc.
+ *
+ * @param tensor The tensor to check
+ * @return True if the tensor can be treated as a scalar
+ */
+inline bool is_scalar_compatible(const Tensor& tensor) { return tensor.size() == 1; }
 
 };  // namespace tensor
 
