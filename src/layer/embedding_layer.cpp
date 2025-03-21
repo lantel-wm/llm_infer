@@ -17,13 +17,13 @@ EmbeddingLayer::EmbeddingLayer(core::DeviceType device_type, int32_t dim, int32_
 
 core::Status EmbeddingLayer::check() const {
   const auto& input_tensor = get_input(0);
-  const auto& token_size = get_input(1).size();
-  if (token_size > input_tensor.size()) {
+  const auto& token_size = get_input(1);
+  if (static_cast<int32_t>(token_size) > input_tensor.size()) {
     return core::error::InvalidArgument("The number of input tensor is greater than seq len.");
   }
 
-  core::Status status =
-      check_tensor_with_dim(input_tensor, m_device_type, core::DataType::INT32, token_size);
+  core::Status status = check_tensor_with_dim(input_tensor, m_device_type, core::DataType::INT32,
+                                              static_cast<int32_t>(token_size));
   if (!status) {
     LOG(ERROR) << "The input tensor error in the embedding layer: " << status.get_err_msg();
     return status;
@@ -35,7 +35,8 @@ core::Status EmbeddingLayer::check() const {
     return status;
   }
 
-  status = check_tensor_with_dim(get_output(0), m_device_type, m_data_type, token_size, m_dim);
+  status = check_tensor_with_dim(get_output(0), m_device_type, m_data_type,
+                                 static_cast<int32_t>(token_size), m_dim);
   if (!status) {
     LOG(ERROR) << "The output tensor error in the embedding layer: " << status.get_err_msg();
     return status;
