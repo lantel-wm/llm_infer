@@ -4,7 +4,7 @@
 #include <numeric>
 #include <utility>
 
-namespace op {
+namespace layer {
 /**
  * @brief Constructs a base layer with specified parameters
  *
@@ -548,4 +548,4 @@ tensor::Tensor& LayerParam::get_weight(int32_t idx) {
   return m_weights.at(idx);
 }
 
-}  // namespace op
+}  // namespace layer

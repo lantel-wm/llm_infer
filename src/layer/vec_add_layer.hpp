@@ -3,7 +3,7 @@
 
 #include "layer.hpp"
 
-namespace op {
+namespace layer {
 class VecAddLayer : public Layer {
  public:
   explicit VecAddLayer(core::DeviceType device_type);
@@ -12,5 +12,5 @@ class VecAddLayer : public Layer {
 
   core::Status forward() override;
 };
-}  // namespace op
+}  // namespace layer
 #endif  // VEC_ADD_HPP

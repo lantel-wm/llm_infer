@@ -8,7 +8,7 @@
 #include "tensor.hpp"
 #include "type.hpp"
 
-namespace op {
+namespace layer {
 
 class Layer;
 
@@ -177,5 +177,5 @@ class LayerParam : public Layer {
   tensor::Tensor m_scales;
   std::vector<tensor::Tensor> m_weights;
 };
-}  // namespace op
+}  // namespace layer
 #endif  // LAYER_HPP

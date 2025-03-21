@@ -3,7 +3,7 @@
 #define EMBEDDING_LAYER_HPP
 #include "layer.hpp"
 
-namespace op {
+namespace layer {
 
 struct EmbeddingOutput {
   tensor::Tensor input_tokens;
@@ -30,6 +30,6 @@ class EmbeddingLayer : public LayerParam {
   int32_t m_seq_len = 0;
   int32_t m_vocab_size = 0;
 };
-}  // namespace op
+}  // namespace layer
 
 #endif  // EMBEDDING_LAYER_HPP
