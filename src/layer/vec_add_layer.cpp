@@ -2,7 +2,7 @@
 #include "kernel.hpp"
 #include "type.hpp"
 
-namespace op {
+namespace layer {
 VecAddLayer::VecAddLayer(core::DeviceType device_type)
     : Layer(device_type, core::LayerType::Add, "Add") {
   reset_input_size(2);
@@ -50,4 +50,4 @@ core::Status VecAddLayer::forward() {
   return core::error::Success();
 }
 
-}  // namespace op
+}  // namespace layer

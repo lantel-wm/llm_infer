@@ -8,7 +8,7 @@
 #include "tensor/tensor.hpp"
 #include "type.hpp"
 
-namespace op {
+namespace layer {
 namespace {
 
 class VecAddLayerTest : public ::testing::Test {
@@ -97,4 +97,4 @@ TEST_F(VecAddLayerTest, GPU) {
 }
 
 }  // namespace
-}  // namespace op
+}  // namespace layer

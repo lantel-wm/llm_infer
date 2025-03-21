@@ -8,7 +8,7 @@
 #include "tensor/tensor.hpp"
 #include "type.hpp"
 
-namespace op {
+namespace layer {
 namespace {
 
 class EmbeddingLayerTest : public ::testing::Test {
@@ -162,4 +162,4 @@ TEST_F(EmbeddingLayerTest, GPU) {
 }
 
 }  // namespace
-}  // namespace op
+}  // namespace layer

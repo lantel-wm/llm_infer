@@ -2,7 +2,7 @@
 #include "kernel.hpp"
 #include "type.hpp"
 
-namespace op {
+namespace layer {
 
 EmbeddingLayer::EmbeddingLayer(core::DeviceType device_type, int32_t dim, int32_t seq_len,
                                int32_t vocab_size)
@@ -56,4 +56,4 @@ core::Status EmbeddingLayer::forward() {
                                               m_cuda_config ? m_cuda_config->stream : nullptr);
   return core::StatusCode::Success;
 }
-}  // namespace op
+}  // namespace layer
