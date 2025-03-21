@@ -201,6 +201,36 @@ Tensor::Tensor(core::DataType data_type, std::vector<int32_t> dims, bool need_al
 }
 
 /**
+ * @brief Constructs a scalar tensor with specified data type
+ *
+ * This constructor creates a scalar tensor (rank-0 tensor) with the given data type.
+ * A scalar tensor has exactly one element and no dimensions.
+ * If need_alloc is true and a memory manager is provided, memory will be allocated.
+ * If ptr is provided and need_alloc is false, the tensor will use the external memory.
+ *
+ * @param data_type The data type of the scalar value
+ * @param need_alloc Whether memory needs to be allocated
+ * @param memory_manager Memory manager for allocation
+ * @param ptr External memory pointer (if provided)
+ */
+Tensor::Tensor(core::DataType data_type, bool need_alloc,
+               std::shared_ptr<core::MemoryManager> memory_manager, void* ptr)
+    : m_data_type(data_type) {
+  // A scalar has size 1 but no dimensions
+  m_size = 1;
+  update_strides();
+  if (need_alloc && memory_manager) {
+    allocate(memory_manager);
+  } else {
+    if (ptr != nullptr) {
+      CHECK(need_alloc == false)
+          << "The need_alloc is true when ptr parameter is not a null pointer.";
+      init_buffer(memory_manager, m_data_type, need_alloc, ptr);
+    }
+  }
+}
+
+/**
  * @brief Transfers tensor data from CPU to GPU memory
  *
  * This method transfers the tensor data from CPU memory to GPU memory using

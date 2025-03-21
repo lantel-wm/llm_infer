@@ -1031,6 +1031,129 @@ TEST_F(TensorTest, GetOffset) {
   EXPECT_DEATH(tensor2d.get_offset(1, 1, 1), ".*");  // Too many indices
 }
 
+// Test scalar tensor constructor and methods
+TEST_F(TensorTest, ScalarTensor) {
+  // Test scalar constructor
+  Tensor scalar_tensor(core::DataType::FP32, true, cpu_memory_manager);
+
+  EXPECT_EQ(scalar_tensor.data_type(), core::DataType::FP32);
+  EXPECT_EQ(scalar_tensor.size(), 1);
+  EXPECT_EQ(scalar_tensor.dims_size(), 0);
+  EXPECT_TRUE(scalar_tensor.is_scalar());
+  EXPECT_FALSE(scalar_tensor.is_empty());
+  EXPECT_EQ(scalar_tensor.byte_size(), 4);  // FP32 is 4 bytes
+  EXPECT_EQ(scalar_tensor.device_type(), core::DeviceType::CPU);
+
+  // Test setting and getting scalar values
+  scalar_tensor.set_scalar_value<float>(3.14f);
+  EXPECT_FLOAT_EQ(scalar_tensor.scalar_value<float>(), 3.14f);
+
+  // Test alternative scalar detection with 1D tensor of size 1
+  Tensor tensor_1d(core::DataType::FP32, 1, true, cpu_memory_manager);
+  EXPECT_TRUE(tensor_1d.is_scalar());
+  EXPECT_EQ(tensor_1d.size(), 1);
+  EXPECT_EQ(tensor_1d.dims_size(), 1);
+
+  // Test is_scalar_compatible utility function
+  EXPECT_TRUE(is_scalar_compatible(scalar_tensor));
+  EXPECT_TRUE(is_scalar_compatible(tensor_1d));
+
+  // Test make_scalar utility function
+  Tensor made_scalar = make_scalar<float>(2.71f, cpu_memory_manager);
+  EXPECT_TRUE(made_scalar.is_scalar());
+  EXPECT_FLOAT_EQ(made_scalar.scalar_value<float>(), 2.71f);
+
+  // Test int scalar
+  Tensor int_scalar = make_scalar<int32_t>(42, cpu_memory_manager);
+  EXPECT_TRUE(int_scalar.is_scalar());
+  EXPECT_EQ(int_scalar.scalar_value<int32_t>(), 42);
+
+  // Test cast operator
+  float float_val = scalar_tensor;
+  EXPECT_FLOAT_EQ(float_val, 3.14f);
+
+  int32_t int_val = int_scalar;
+  EXPECT_EQ(int_val, 42);
+
+  // Test clone for scalar tensor
+  Tensor cloned = scalar_tensor.clone();
+  EXPECT_TRUE(cloned.is_scalar());
+  EXPECT_FLOAT_EQ(cloned.scalar_value<float>(), 3.14f);
+
+  // Change the original
+  scalar_tensor.set_scalar_value<float>(1.23f);
+
+  // Verify clone is independent
+  EXPECT_FLOAT_EQ(cloned.scalar_value<float>(), 3.14f);
+  EXPECT_FLOAT_EQ(scalar_tensor.scalar_value<float>(), 1.23f);
+
+  // Test device transfers for scalar tensor
+  // Skip test if CUDA is not available
+  int device_count = 0;
+  if (cudaGetDeviceCount(&device_count) == cudaSuccess && device_count > 0) {
+    scalar_tensor.to_cuda();
+    EXPECT_EQ(scalar_tensor.device_type(), core::DeviceType::GPU);
+
+    scalar_tensor.to_cpu();
+    EXPECT_EQ(scalar_tensor.device_type(), core::DeviceType::CPU);
+    EXPECT_FLOAT_EQ(scalar_tensor.scalar_value<float>(), 1.23f);
+  }
+}
+
+// Test scalar tensor in operations (basic arithmetic and comparison)
+TEST_F(TensorTest, ScalarTensorOperations) {
+  // Create scalar tensors with different types
+  Tensor float_scalar = make_scalar<float>(3.5f, cpu_memory_manager);
+  Tensor int_scalar = make_scalar<int32_t>(7, cpu_memory_manager);
+
+  // Test implicit conversion in arithmetic operations
+  float float_val = float_scalar;
+  int32_t int_val = int_scalar;
+
+  EXPECT_FLOAT_EQ(float_val + 1.0f, 4.5f);
+  EXPECT_EQ(int_val * 2, 14);
+
+  // Verify conversion between scalar tensor types
+  EXPECT_FLOAT_EQ(static_cast<float>(int_scalar.scalar_value<int32_t>()), 7.0f);
+  EXPECT_EQ(static_cast<int32_t>(float_scalar.scalar_value<float>()), 3);
+
+  // Test comparison operators with explicit conversion
+  EXPECT_TRUE(static_cast<float>(float_scalar) > 3.0f);
+  EXPECT_TRUE(static_cast<int32_t>(int_scalar) < 10);
+  EXPECT_FALSE(static_cast<float>(float_scalar) == 3.0f);
+  EXPECT_TRUE(static_cast<int32_t>(int_scalar) != 8);
+
+  // Create additional tensors for more tests
+  Tensor scalar1 = make_scalar<float>(1.0f, cpu_memory_manager);
+  Tensor scalar2 = make_scalar<float>(1.0f, cpu_memory_manager);
+
+  // Test equality between scalar tensors with same value
+  EXPECT_FLOAT_EQ(static_cast<float>(scalar1), static_cast<float>(scalar2));
+}
+
+// Test error conditions for scalar tensors
+TEST_F(TensorTest, ScalarTensorErrors) {
+  // Create scalar tensor
+  Tensor scalar_tensor(core::DataType::FP32, true, cpu_memory_manager);
+  scalar_tensor.set_scalar_value<float>(3.14f);
+
+  // Create non-scalar tensor
+  Tensor non_scalar(core::DataType::FP32, 2, true, cpu_memory_manager);
+
+  // Test accessing scalar value of non-scalar tensor
+  EXPECT_DEATH(non_scalar.scalar_value<float>(), ".*");
+
+  // Test setting scalar value on non-scalar tensor
+  EXPECT_DEATH(non_scalar.set_scalar_value<float>(1.0f), ".*");
+
+  // Create scalar tensor without allocation
+  Tensor unallocated_scalar(core::DataType::FP32, false, nullptr);
+
+  // Test accessing/setting scalar value without allocation
+  EXPECT_DEATH(unallocated_scalar.scalar_value<float>(), ".*");
+  EXPECT_DEATH(unallocated_scalar.set_scalar_value<float>(1.0f), ".*");
+}
+
 }  // namespace
 }  // namespace tensor
 
