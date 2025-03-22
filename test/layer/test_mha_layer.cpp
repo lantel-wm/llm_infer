@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <cstdint>
 #include <memory>
 #include <vector>
 #include "config.hpp"
@@ -33,7 +34,7 @@ class MhaLayerTest : public ::testing::Test {
   const int32_t layer_idx = 0;
   const int32_t num_layers = 8;
   const int32_t batch_size = 1;
-  const int32_t kv_mul = 1;  // For grouped-query attention, GQA=1 means regular attention
+  const int32_t kv_mul = 2;  // For grouped-query attention, GQA=1 means regular attention
   const int32_t num_heads = 4;
   const int32_t head_size = 16;
   const int32_t hidden_size = num_heads * head_size;
@@ -41,12 +42,13 @@ class MhaLayerTest : public ::testing::Test {
   const int32_t seq_len = 8;
   const int32_t query_seq_len = seq_len;
   const int32_t kv_seq_len = seq_len;
+  const int32_t max_position_embeddings = seq_len * 2;
 };
 
 TEST_F(MhaLayerTest, CPUForward) {
   // Create MHA layer
-  MultiHeadAttention mha_layer(core::DeviceType::CPU, layer_idx, num_layers, batch_size, kv_mul,
-                               kv_size, query_seq_len, kv_seq_len, num_heads, head_size);
+  MultiHeadAttention mha_layer(core::DeviceType::CPU, layer_idx, num_layers,
+                               max_position_embeddings, kv_mul, kv_size, num_heads, head_size);
 
   // Create query tensor: [batch_size, seq_len, num_heads, head_size]
   tensor::Tensor query_tensor(core::DataType::FP32,
@@ -59,19 +61,16 @@ TEST_F(MhaLayerTest, CPUForward) {
       true, cpu_memory_manager);
 
   // Create key cache tensor: [num_layers, batch_size, num_heads, kv_seq_len, head_size]
-  tensor::Tensor key_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
+  tensor::Tensor key_cache_tensor(core::DataType::FP32,
+                                  std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                       max_position_embeddings, head_size},
+                                  true, cpu_memory_manager);
 
   // Create value cache tensor: [num_layers, batch_size, num_heads, kv_seq_len, head_size]
-  tensor::Tensor value_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
-
-  // Create position tensor: [kv_seq_len]
-  tensor::Tensor pos_tensor(core::DataType::FP32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor value_cache_tensor(core::DataType::FP32,
+                                    std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                         max_position_embeddings, head_size},
+                                    true, cpu_memory_manager);
 
   // Create output tensor: [batch_size, query_seq_len, num_heads, head_size]
   tensor::Tensor output_tensor(
@@ -80,31 +79,29 @@ TEST_F(MhaLayerTest, CPUForward) {
 
   // Initialize tensors with test values
   // Initialize query with simple pattern
-  for (int i = 0; i < batch_size * query_seq_len * num_heads * head_size; i++) {
+  for (int i = 0; i < query_tensor.size(); i++) {
     query_tensor.index<float>(i) = static_cast<float>(i % 10) * 0.1f;
   }
 
   // Initialize key cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < key_cache_tensor.size(); i++) {
     key_cache_tensor.index<float>(i) = static_cast<float>((i + 3) % 10) * 0.1f;
   }
 
   // Initialize value cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < value_cache_tensor.size(); i++) {
     value_cache_tensor.index<float>(i) = static_cast<float>((i + 5) % 10) * 0.1f;
   }
 
-  // Init position tensor
-  for (int i = 0; i < kv_seq_len; i++) {
-    pos_tensor.index<float>(i) = static_cast<float>(i);
-  }
-
-  // Set layer inputs and outputs
+  // Set layer params, inputs and outputs
+  mha_layer.set_layer_idx(0);
+  mha_layer.set_batch_size(batch_size);
+  mha_layer.set_query_seq_len(query_seq_len);
+  mha_layer.set_kv_seq_len(kv_seq_len);
   mha_layer.set_input(0, query_tensor);
   mha_layer.set_input(1, score_tensor);
   mha_layer.set_input(2, key_cache_tensor);
   mha_layer.set_input(3, value_cache_tensor);
-  mha_layer.set_input(4, pos_tensor);
   mha_layer.set_output(0, output_tensor);
 
   // Run checks
@@ -116,7 +113,7 @@ TEST_F(MhaLayerTest, CPUForward) {
   // We're not testing specific values, but the function should execute without errors
   // and produce non-zero output
   bool has_non_zero = false;
-  for (int i = 0; i < batch_size * query_seq_len * num_heads * head_size; i++) {
+  for (int i = 0; i < output_tensor.size(); i++) {
     if (std::abs(output_tensor.index<float>(i)) > 1e-6) {
       has_non_zero = true;
       break;
@@ -127,8 +124,8 @@ TEST_F(MhaLayerTest, CPUForward) {
 
 TEST_F(MhaLayerTest, SetLayerIdx) {
   // Create MHA layer
-  MultiHeadAttention mha_layer(core::DeviceType::CPU, layer_idx, num_layers, batch_size, kv_mul,
-                               kv_size, query_seq_len, kv_seq_len, num_heads, head_size);
+  MultiHeadAttention mha_layer(core::DeviceType::CPU, layer_idx, num_layers,
+                               max_position_embeddings, kv_mul, kv_size, num_heads, head_size);
 
   // Test set_layer_idx functionality
   const int32_t new_layer_idx = 2;
@@ -144,41 +141,43 @@ TEST_F(MhaLayerTest, SetLayerIdx) {
   tensor::Tensor score_tensor(
       core::DataType::FP32, std::vector<int32_t>{batch_size, num_heads, query_seq_len, kv_seq_len},
       true, cpu_memory_manager);
-  tensor::Tensor key_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
-  tensor::Tensor value_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
-  tensor::Tensor pos_tensor(core::DataType::FP32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor key_cache_tensor(core::DataType::FP32,
+                                  std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                       max_position_embeddings, head_size},
+                                  true, cpu_memory_manager);
+  tensor::Tensor value_cache_tensor(core::DataType::FP32,
+                                    std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                         max_position_embeddings, head_size},
+                                    true, cpu_memory_manager);
   tensor::Tensor output_tensor(
       core::DataType::FP32, std::vector<int32_t>{batch_size, query_seq_len, num_heads, head_size},
       true, cpu_memory_manager);
 
   // Initialize tensors with test values
   // Initialize query with simple pattern
-  for (int i = 0; i < batch_size * query_seq_len * num_heads * head_size; i++) {
+  for (int i = 0; i < query_tensor.size(); i++) {
     query_tensor.index<float>(i) = static_cast<float>(i % 10) * 0.1f;
   }
 
   // Initialize key cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < key_cache_tensor.size(); i++) {
     key_cache_tensor.index<float>(i) = static_cast<float>((i + 3) % 10) * 0.1f;
   }
 
   // Initialize value cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < value_cache_tensor.size(); i++) {
     value_cache_tensor.index<float>(i) = static_cast<float>((i + 5) % 10) * 0.1f;
   }
 
-  // Set layer inputs and outputs
+  // Set layer params, inputs and outputs
+  mha_layer.set_layer_idx(new_layer_idx);
+  mha_layer.set_batch_size(batch_size);
+  mha_layer.set_query_seq_len(query_seq_len);
+  mha_layer.set_kv_seq_len(kv_seq_len);
   mha_layer.set_input(0, query_tensor);
   mha_layer.set_input(1, score_tensor);
   mha_layer.set_input(2, key_cache_tensor);
   mha_layer.set_input(3, value_cache_tensor);
-  mha_layer.set_input(4, pos_tensor);
   mha_layer.set_output(0, output_tensor);
 
   // Verify checks pass after layer_idx update
@@ -195,8 +194,8 @@ TEST_F(MhaLayerTest, GPU) {
   }
 
   // Create MHA layer for GPU
-  MultiHeadAttention mha_layer(core::DeviceType::GPU, layer_idx, num_layers, batch_size, kv_mul,
-                               kv_size, query_seq_len, kv_seq_len, num_heads, head_size);
+  MultiHeadAttention mha_layer(core::DeviceType::GPU, layer_idx, num_layers,
+                               max_position_embeddings, kv_mul, kv_size, num_heads, head_size);
 
   // Set CUDA config
   auto cuda_config = std::make_shared<core::CudaConfig>();
@@ -209,32 +208,31 @@ TEST_F(MhaLayerTest, GPU) {
   tensor::Tensor score_tensor(
       core::DataType::FP32, std::vector<int32_t>{batch_size, num_heads, query_seq_len, kv_seq_len},
       true, cpu_memory_manager);
-  tensor::Tensor key_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
-  tensor::Tensor value_cache_tensor(
-      core::DataType::FP32,
-      std::vector<int32_t>{num_layers, batch_size, num_heads, kv_seq_len, head_size}, true,
-      cpu_memory_manager);
-  tensor::Tensor pos_tensor(core::DataType::FP32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor key_cache_tensor(core::DataType::FP32,
+                                  std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                       max_position_embeddings, head_size},
+                                  true, cpu_memory_manager);
+  tensor::Tensor value_cache_tensor(core::DataType::FP32,
+                                    std::vector<int32_t>{num_layers, batch_size, num_heads / kv_mul,
+                                                         max_position_embeddings, head_size},
+                                    true, cpu_memory_manager);
   tensor::Tensor output_tensor(
       core::DataType::FP32, std::vector<int32_t>{batch_size, query_seq_len, num_heads, head_size},
       true, gpu_memory_manager);
 
   // Initialize tensors with test values
   // Initialize query with simple pattern
-  for (int i = 0; i < batch_size * query_seq_len * num_heads * head_size; i++) {
+  for (int i = 0; i < query_tensor.size(); i++) {
     query_tensor.index<float>(i) = static_cast<float>(i % 10) * 0.1f;
   }
 
   // Initialize key cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < key_cache_tensor.size(); i++) {
     key_cache_tensor.index<float>(i) = static_cast<float>((i + 3) % 10) * 0.1f;
   }
 
   // Initialize value cache with a pattern
-  for (int i = 0; i < num_layers * batch_size * num_heads * kv_seq_len * head_size; i++) {
+  for (int i = 0; i < value_cache_tensor.size(); i++) {
     value_cache_tensor.index<float>(i) = static_cast<float>((i + 5) % 10) * 0.1f;
   }
 
@@ -243,14 +241,16 @@ TEST_F(MhaLayerTest, GPU) {
   score_tensor.to_cuda();
   key_cache_tensor.to_cuda();
   value_cache_tensor.to_cuda();
-  pos_tensor.to_cuda();
 
-  // Set layer inputs and outputs
+  // Set layer params, inputs and outputs
+  mha_layer.set_layer_idx(layer_idx);
+  mha_layer.set_batch_size(batch_size);
+  mha_layer.set_query_seq_len(query_seq_len);
+  mha_layer.set_kv_seq_len(kv_seq_len);
   mha_layer.set_input(0, query_tensor);
   mha_layer.set_input(1, score_tensor);
   mha_layer.set_input(2, key_cache_tensor);
   mha_layer.set_input(3, value_cache_tensor);
-  mha_layer.set_input(4, pos_tensor);
   mha_layer.set_output(0, output_tensor);
 
   // Run checks
@@ -266,7 +266,7 @@ TEST_F(MhaLayerTest, GPU) {
   // We're not testing specific values, but the function should execute without errors
   // and produce non-zero output
   bool has_non_zero = false;
-  for (int i = 0; i < batch_size * query_seq_len * num_heads * head_size; i++) {
+  for (int i = 0; i < output_gpu_cpu.size(); i++) {
     if (std::abs(output_gpu_cpu.index<float>(i)) > 1e-6) {
       has_non_zero = true;
       break;
