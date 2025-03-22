@@ -16,11 +16,17 @@ class RoPELayer : public Layer {
 
   void set_batch_size(int32_t batch_size);
 
+  void set_q_seq_len(int32_t q_seq_len);
+
+  void set_kv_seq_len(int32_t kv_seq_len);
+
  private:
   int32_t m_hidden_size = 0;
   int32_t m_kv_size = 0;
   int32_t m_head_size = 0;
   int32_t m_batch_size = 0;
+  int32_t m_q_seq_len = 0;
+  int32_t m_kv_seq_len = 0;
 };
 }  // namespace layer
 #endif  // ROPE_LAYER_HPP
