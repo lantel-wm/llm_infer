@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 
 namespace core {
 
@@ -29,6 +30,27 @@ enum class DataType : uint8_t {
   INT8 = 2,
   INT32 = 3,
 };
+
+inline std::ostream& operator<<(std::ostream& os, const DataType& dt) {
+  switch (dt) {
+    case DataType::Unknown:
+      os << "DataType::Unknown";
+      break;
+    case DataType::FP32:
+      os << "DataType::FP32";
+      break;
+    case DataType::INT8:
+      os << "DataType::INT8";
+      break;
+    case DataType::INT32:
+      os << "DataType::INT32";
+      break;
+    default:
+      os << "DataType::Invalid";
+      break;
+  }
+  return os;
+}
 
 inline size_t DataTypeSize(DataType data_type) {
   if (data_type == DataType::FP32) {
