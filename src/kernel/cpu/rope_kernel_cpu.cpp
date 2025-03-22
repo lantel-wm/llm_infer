@@ -53,18 +53,22 @@ void sin_cos_cache_calc_cpu(float rope_theta, int head_size, int max_seq_len,
  * @param head_size Size of each attention head
  * @param input_q Query tensor [batch_size, seq_len, num_q_heads, head_size]
  * @param input_k Key tensor [batch_size, seq_len, num_k_heads, head_size]
- * @param input_pos Position indices tensor
+ * @param input_q_pos Position indices tensor for queries
+ * @param input_k_pos Position indices tensor for keys
  * @param sin_cache Precomputed sine values [max_seq_len, head_size]
  * @param cos_cache Precomputed cosine values [max_seq_len, head_size]
  * @param stream Unused in CPU implementation but kept for API consistency with GPU version
  *
  * @note The function applies rotations in place, modifying input_q and input_k directly.
  *       It supports grouped-query attention where num_q_heads may be larger than num_k_heads.
+ *       For each position, it processes pairs of dimensions (2i, 2i+1) by applying a 2D rotation
+ *       where the rotation angle depends on the position and dimension index.
  */
 void rope_kernel_cpu(int32_t hidden_size, int32_t key_value_size, int32_t head_size,
                      const tensor::Tensor& input_q, const tensor::Tensor& input_k,
-                     const tensor::Tensor& input_pos, const tensor::Tensor& sin_cache,
-                     const tensor::Tensor& cos_cache, void* stream) {
+                     const tensor::Tensor& input_q_pos, const tensor::Tensor& input_k_pos,
+                     const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
+                     void* stream) {
   // q.shape: [batch_size, seq_len, hidden_size / head_size, head_size]
   // k.shape: [batch_size, seq_len, key_value_size / head_size, head_size]
   // Get batch_size, num_attention_heads values from input shapes
@@ -72,47 +76,48 @@ void rope_kernel_cpu(int32_t hidden_size, int32_t key_value_size, int32_t head_s
   const int32_t num_q_heads = hidden_size / head_size;
   const int32_t num_k_heads = key_value_size / head_size;
   for (int batch = 0; batch < batch_size; batch++) {
-    for (int pos_idx = 0; pos_idx < input_pos.size(); pos_idx++) {
-      const int32_t pos = input_pos.index<int32_t>(pos_idx);
-
-      // For each head and position
+    for (int pos_idx = 0; pos_idx < input_q_pos.size(); pos_idx++) {
+      const int32_t pos = input_q_pos.index<int32_t>(pos_idx);
       // Handle query tensor
-      for (int n = 0; n < num_q_heads; n++) {
+      for (int head_idx = 0; head_idx < num_q_heads; head_idx++) {
         for (int h = 0; h < head_size / 2; h++) {
           float sin_val = sin_cache.at<float>(pos, h * 2);
           float cos_val = cos_cache.at<float>(pos, h * 2);
 
           // Get original x1 and x2 values
-          float x1 = input_q.at<float>(batch, pos_idx, n, h * 2);
-          float x2 = input_q.at<float>(batch, pos_idx, n, h * 2 + 1);
+          float x1 = input_q.at<float>(batch, pos_idx, head_idx, h * 2);
+          float x2 = input_q.at<float>(batch, pos_idx, head_idx, h * 2 + 1);
 
           // Apply rotation
           float* q_ptr = const_cast<float*>(input_q.ptr<float>());
-          int q_idx = ((batch * input_q.get_dim(1) + pos_idx) * num_q_heads + n) * head_size;
+          int q_idx = ((batch * input_q.get_dim(1) + pos_idx) * num_q_heads + head_idx) * head_size;
           q_ptr[q_idx + h * 2] = x1 * cos_val - x2 * sin_val;
           q_ptr[q_idx + h * 2 + 1] = x2 * cos_val + x1 * sin_val;
         }
       }
+    }
 
+    for (int pos_idx = 0; pos_idx < input_k_pos.size(); pos_idx++) {
+      const int32_t pos = input_k_pos.index<int32_t>(pos_idx);
       // Handle key tensor
-      for (int head = 0; head < num_k_heads; head++) {
-        for (int i = 0; i < head_size / 2; i++) {
-          float sin_val = sin_cache.at<float>(pos, i * 2);
-          float cos_val = cos_cache.at<float>(pos, i * 2);
+      for (int head_idx = 0; head_idx < num_k_heads; head_idx++) {
+        for (int h = 0; h < head_size / 2; h++) {
+          float sin_val = sin_cache.at<float>(pos, h * 2);
+          float cos_val = cos_cache.at<float>(pos, h * 2);
 
           // Get original x1 and x2 values
-          float x1 = input_k.at<float>(batch, pos_idx, head, i * 2);
-          float x2 = input_k.at<float>(batch, pos_idx, head, i * 2 + 1);
+          float x1 = input_k.at<float>(batch, pos_idx, head_idx, h * 2);
+          float x2 = input_k.at<float>(batch, pos_idx, head_idx, h * 2 + 1);
 
           // Apply rotation
           float* k_ptr = const_cast<float*>(input_k.ptr<float>());
-          int k_idx = ((batch * input_k.get_dim(1) + pos_idx) * num_k_heads + head) * head_size;
-          k_ptr[k_idx + i * 2] = x1 * cos_val - x2 * sin_val;
-          k_ptr[k_idx + i * 2 + 1] = x2 * cos_val + x1 * sin_val;
+          int k_idx = ((batch * input_k.get_dim(1) + pos_idx) * num_k_heads + head_idx) * head_size;
+          k_ptr[k_idx + h * 2] = x1 * cos_val - x2 * sin_val;
+          k_ptr[k_idx + h * 2 + 1] = x2 * cos_val + x1 * sin_val;
         }
       }
     }
   }
 }
-// ... existing code ...
+
 }  // namespace kernel

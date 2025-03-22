@@ -72,7 +72,7 @@ TEST_F(RopeKernelTest, SinCosCacheCalc) {
 }
 
 // Test basic RoPE functionality with simple values
-TEST_F(RopeKernelTest, MultiHeadAttention) {
+TEST_F(RopeKernelTest, MultiHeadAttentionPrefill) {
   const float rope_theta = 1000000.0f;
   const int32_t max_position_embeddings = 512;
   const int32_t hidden_size = 256;
@@ -88,15 +88,17 @@ TEST_F(RopeKernelTest, MultiHeadAttention) {
                    true, cpu_memory_manager);
   tensor::Tensor k(core::DataType::FP32, {batch_size, seq_len, num_key_value_heads, head_size},
                    true, cpu_memory_manager);
-  tensor::Tensor position(core::DataType::INT32, seq_len, true, cpu_memory_manager);
-  tensor::Tensor sin_cache(core::DataType::FP32, {seq_len, head_size}, true, cpu_memory_manager);
-  tensor::Tensor cos_cache(core::DataType::FP32, {seq_len, head_size}, true, cpu_memory_manager);
+  tensor::Tensor positions(core::DataType::INT32, seq_len, true, cpu_memory_manager);
+  tensor::Tensor sin_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+  tensor::Tensor cos_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
 
   // Initialize with simple patterns:
   // q: [1, 0, 1, 0, ...] for all positions
   // k: [0, 1, 0, 1, ...] for all positions
   for (int pos = 0; pos < seq_len; pos++) {
-    position.at<int32_t>(pos) = pos;
+    positions.at<int32_t>(pos) = pos;
     for (int n = 0; n < num_attention_heads; n++) {
       for (int h = 0; h < head_size; h++) {
         int idx = (pos * num_attention_heads + n) * head_size + h;
@@ -109,11 +111,11 @@ TEST_F(RopeKernelTest, MultiHeadAttention) {
   }
 
   // Calculate sin/cos cache
-  sin_cos_cache_calc_cpu(rope_theta, head_size, seq_len, sin_cache, cos_cache);
+  sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
 
   // Run RoPE kernel
-  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, position, sin_cache, cos_cache,
-                  nullptr);
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, positions, positions, sin_cache,
+                  cos_cache, nullptr);
 
   // Manually calculate expected values for a few test cases
   // For position 0, cos=1, sin=0 (approximately), so no change from input
@@ -140,9 +142,80 @@ TEST_F(RopeKernelTest, MultiHeadAttention) {
 }
 
 // Test basic RoPE functionality with simple values
+TEST_F(RopeKernelTest, MultiHeadAttentionDecode) {
+  const float rope_theta = 1000000.0f;
+  const int32_t max_position_embeddings = 512;
+  const int32_t hidden_size = 256;
+  const int32_t num_attention_heads = 4;
+  const int32_t num_key_value_heads = 4;
+  const int32_t head_size = hidden_size / num_attention_heads;
+  const int32_t key_value_size = head_size * num_key_value_heads;
+  const int32_t batch_size = 1;
+  const int32_t kv_seq_len = 4;
+  const int32_t query_seq_len = 1;
+
+  // Create tensors
+  tensor::Tensor q(core::DataType::FP32,
+                   {batch_size, query_seq_len, num_attention_heads, head_size}, true,
+                   cpu_memory_manager);
+  tensor::Tensor k(core::DataType::FP32, {batch_size, kv_seq_len, num_key_value_heads, head_size},
+                   true, cpu_memory_manager);
+  tensor::Tensor q_positions(core::DataType::INT32, query_seq_len, true, cpu_memory_manager);
+  tensor::Tensor k_positions(core::DataType::INT32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor sin_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+  tensor::Tensor cos_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+
+  // Initialize with simple patterns:
+  // q: [1, 0, 1, 0, ...] for all positions
+  // k: [0, 1, 0, 1, ...] for all positions
+  q_positions.at<int32_t>(0) = 0;
+  for (int pos = 0; pos < kv_seq_len; pos++) {
+    k_positions.at<int32_t>(pos) = pos;
+    for (int n = 0; n < num_attention_heads; n++) {
+      for (int h = 0; h < head_size; h++) {
+        if (pos < query_seq_len) {
+          q.at<float>(0, pos, n, h) = (h % 2 == 0) ? 1.0f : -1.0f;
+        }
+        if (n < num_key_value_heads) {
+          k.at<float>(0, pos, n, h) = (h % 2 == 0) ? -1.0f : 1.0f;
+        }
+      }
+    }
+  }
+
+  // Calculate sin/cos cache
+  sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
+
+  // Run RoPE kernel
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, q_positions, k_positions, sin_cache,
+                  cos_cache, nullptr);
+
+  // Manually calculate expected values for a few test cases
+  // For position 0, cos=1, sin=0 (approximately), so no change from input
+  EXPECT_NEAR(q.at<float>(0, 0, 0, 0), 1.0f, 1e-5f);   // batch=0, pos=0, head=0, dim=0
+  EXPECT_NEAR(q.at<float>(0, 0, 0, 1), -1.0f, 1e-5f);  // batch=0, pos=0, head=0, dim=1
+  EXPECT_NEAR(k.at<float>(0, 0, 0, 0), -1.0f, 1e-5f);  // batch=0, pos=0, head=0, dim=0
+  EXPECT_NEAR(k.at<float>(0, 0, 0, 1), 1.0f, 1e-5f);   // batch=0, pos=0, head=0, dim=1
+
+  // For later positions, verify general pattern (not exact values)
+  for (int pos = 1; pos < kv_seq_len; pos++) {
+    // Get the first pair of values for this position
+    float k0 = k.at<float>(0, pos, 0, 0);
+    float k1 = k.at<float>(0, pos, 0, 1);
+
+    // Values should be different from the original pattern due to rotation
+    // Use EXPECT_FALSE with EXPECT_NEAR to check values are not close to original
+    EXPECT_NE(k0, -1.0f);
+    EXPECT_NE(k1, 1.0f);
+  }
+}
+
+// Test basic RoPE functionality with simple values
 TEST_F(RopeKernelTest, GroupQueryAttention) {
   const float rope_theta = 1000000.0f;
-  const int32_t max_position_embeddings = 4;
+  const int32_t max_position_embeddings = 16;
   const int32_t hidden_size = 8;
   const int32_t num_attention_heads = 4;
   const int32_t num_key_value_heads = 2;
@@ -156,15 +229,17 @@ TEST_F(RopeKernelTest, GroupQueryAttention) {
                    true, cpu_memory_manager);
   tensor::Tensor k(core::DataType::FP32, {batch_size, seq_len, num_key_value_heads, head_size},
                    true, cpu_memory_manager);
-  tensor::Tensor position(core::DataType::INT32, seq_len, true, cpu_memory_manager);
-  tensor::Tensor sin_cache(core::DataType::FP32, {seq_len, head_size}, true, cpu_memory_manager);
-  tensor::Tensor cos_cache(core::DataType::FP32, {seq_len, head_size}, true, cpu_memory_manager);
+  tensor::Tensor positions(core::DataType::INT32, seq_len, true, cpu_memory_manager);
+  tensor::Tensor sin_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+  tensor::Tensor cos_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
 
   // Initialize with simple patterns:
   // q: [1, 0, 1, 0, ...] for all positions
   // k: [0, 1, 0, 1, ...] for all positions
   for (int pos_idx = 0; pos_idx < seq_len; pos_idx++) {
-    position.at<int32_t>(pos_idx) = pos_idx;
+    positions.at<int32_t>(pos_idx) = pos_idx;
     for (int n = 0; n < num_attention_heads; n++) {
       for (int h = 0; h < head_size; h++) {
         int idx = (pos_idx * num_attention_heads + n) * head_size + h;
@@ -180,8 +255,8 @@ TEST_F(RopeKernelTest, GroupQueryAttention) {
   sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
 
   // Run RoPE kernel
-  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, position, sin_cache, cos_cache,
-                  nullptr);
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, positions, positions, sin_cache,
+                  cos_cache, nullptr);
 
   // Manually calculate expected values for a few test cases
   // For position 0, cos=1, sin=0 (approximately), so no change from input
@@ -193,7 +268,7 @@ TEST_F(RopeKernelTest, GroupQueryAttention) {
   // For later positions, verify general pattern (not exact values)
   for (int pos_idx = 1; pos_idx < seq_len; pos_idx++) {
     // Get the first pair of values for this position
-    int pos = position.at<int>(pos_idx);
+    int pos = positions.at<int>(pos_idx);
     float q0 = q.at<float>(0, pos, 0, 0);
     float q1 = q.at<float>(0, pos, 0, 1);
     float k0 = k.at<float>(0, pos, 0, 0);
@@ -208,9 +283,80 @@ TEST_F(RopeKernelTest, GroupQueryAttention) {
   }
 }
 
+// Test basic RoPE functionality with simple values
+TEST_F(RopeKernelTest, GroupQueryAttentionDecode) {
+  const float rope_theta = 1000000.0f;
+  const int32_t max_position_embeddings = 512;
+  const int32_t hidden_size = 256;
+  const int32_t num_attention_heads = 4;
+  const int32_t num_key_value_heads = 2;
+  const int32_t head_size = hidden_size / num_attention_heads;
+  const int32_t key_value_size = head_size * num_key_value_heads;
+  const int32_t batch_size = 1;
+  const int32_t kv_seq_len = 4;
+  const int32_t query_seq_len = 1;
+
+  // Create tensors
+  tensor::Tensor q(core::DataType::FP32,
+                   {batch_size, query_seq_len, num_attention_heads, head_size}, true,
+                   cpu_memory_manager);
+  tensor::Tensor k(core::DataType::FP32, {batch_size, kv_seq_len, num_key_value_heads, head_size},
+                   true, cpu_memory_manager);
+  tensor::Tensor q_positions(core::DataType::INT32, query_seq_len, true, cpu_memory_manager);
+  tensor::Tensor k_positions(core::DataType::INT32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor sin_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+  tensor::Tensor cos_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+
+  // Initialize with simple patterns:
+  // q: [1, 0, 1, 0, ...] for all positions
+  // k: [0, 1, 0, 1, ...] for all positions
+  q_positions.at<int32_t>(0) = 0;
+  for (int pos = 0; pos < kv_seq_len; pos++) {
+    k_positions.at<int32_t>(pos) = pos;
+    for (int n = 0; n < num_attention_heads; n++) {
+      for (int h = 0; h < head_size; h++) {
+        if (pos < query_seq_len) {
+          q.at<float>(0, pos, n, h) = (h % 2 == 0) ? 1.0f : -1.0f;
+        }
+        if (n < num_key_value_heads) {
+          k.at<float>(0, pos, n, h) = (h % 2 == 0) ? -1.0f : 1.0f;
+        }
+      }
+    }
+  }
+
+  // Calculate sin/cos cache
+  sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
+
+  // Run RoPE kernel
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, q_positions, k_positions, sin_cache,
+                  cos_cache, nullptr);
+
+  // Manually calculate expected values for a few test cases
+  // For position 0, cos=1, sin=0 (approximately), so no change from input
+  EXPECT_NEAR(q.at<float>(0, 0, 0, 0), 1.0f, 1e-5f);   // batch=0, pos=0, head=0, dim=0
+  EXPECT_NEAR(q.at<float>(0, 0, 0, 1), -1.0f, 1e-5f);  // batch=0, pos=0, head=0, dim=1
+  EXPECT_NEAR(k.at<float>(0, 0, 0, 0), -1.0f, 1e-5f);  // batch=0, pos=0, head=0, dim=0
+  EXPECT_NEAR(k.at<float>(0, 0, 0, 1), 1.0f, 1e-5f);   // batch=0, pos=0, head=0, dim=1
+
+  // For later positions, verify general pattern (not exact values)
+  for (int pos = 1; pos < kv_seq_len; pos++) {
+    // Get the first pair of values for this position
+    float k0 = k.at<float>(0, pos, 0, 0);
+    float k1 = k.at<float>(0, pos, 0, 1);
+
+    // Values should be different from the original pattern due to rotation
+    // Use EXPECT_FALSE with EXPECT_NEAR to check values are not close to original
+    EXPECT_NE(k0, -1.0f);
+    EXPECT_NE(k1, 1.0f);
+  }
+}
+
 #ifndef PYTORCH_NOT_FOUND
 // Test RoPE against PyTorch implementation
-TEST_F(RopeKernelTest, CompareWithPyTorch) {
+TEST_F(RopeKernelTest, CompareWithPyTorchPrefill) {
   {
     std::ofstream py_file("generate_rope_data.py");
     py_file << R"(
@@ -332,8 +478,8 @@ k_rot.numpy().astype(np.float32).tofile("rope_output_k.bin")
   sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
 
   // Run RoPE kernel
-  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, positions, sin_cache, cos_cache,
-                  nullptr);
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, positions, positions, sin_cache,
+                  cos_cache, nullptr);
 
   // Compare result with expected output
   for (int b = 0; b < batch_size; b++) {
