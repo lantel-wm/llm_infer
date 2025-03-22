@@ -555,4 +555,38 @@ void Tensor::init_buffer(std::shared_ptr<core::MemoryManager> memory_manager,
     allocate(memory_manager, true);
   }
 }
+
+/**
+ * @brief Creates a tensor filled with zeros
+ *
+ * This function creates a tensor with the specified data type and dimensions,
+ * with all elements initialized to zero. The tensor's memory is allocated
+ * using the provided memory manager or the default CPU memory manager.
+ *
+ * @param data_type Data type of the tensor elements
+ * @param dims Dimensions of the tensor
+ * @param memory_manager Memory manager for allocation (optional)
+ * @return A tensor filled with zeros
+ */
+Tensor zeros(core::DataType data_type, const std::vector<int32_t>& dims,
+             std::shared_ptr<core::MemoryManager> memory_manager) {
+  // Use CPU memory manager if none provided
+  if (!memory_manager) {
+    memory_manager = core::CPUMemoryManagerFactory::get_instance();
+  }
+
+  // Create and allocate the tensor
+  Tensor tensor(data_type, dims, true, memory_manager);
+
+  // Set all elements to zero
+  if (tensor.device_type() == core::DeviceType::CPU) {
+    // For CPU tensors, use memset
+    memory_manager->memset0(tensor.get_buffer()->ptr(), tensor.byte_size(), nullptr);
+  } else if (tensor.device_type() == core::DeviceType::GPU) {
+    // For GPU tensors, use CUDA memset
+    memory_manager->memset0(tensor.get_buffer()->ptr(), tensor.byte_size(), nullptr);
+  }
+
+  return tensor;
+}
 }  // namespace tensor

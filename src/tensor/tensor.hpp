@@ -499,6 +499,20 @@ Tensor make_scalar(T value, std::shared_ptr<core::MemoryManager> memory_manager)
  */
 inline bool is_scalar_compatible(const Tensor& tensor) { return tensor.size() == 1; }
 
+/**
+ * @brief Creates a tensor filled with zeros
+ *
+ * This function creates a tensor with the specified data type and dimensions,
+ * with all elements initialized to zero.
+ *
+ * @param data_type Data type of the tensor elements
+ * @param dims Dimensions of the tensor
+ * @param memory_manager Memory manager for allocation
+ * @return A tensor filled with zeros
+ */
+Tensor zeros(core::DataType data_type, const std::vector<int32_t>& dims,
+             std::shared_ptr<core::MemoryManager> memory_manager = nullptr);
+
 };  // namespace tensor
 
 #endif  // TENSOR_HPP

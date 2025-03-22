@@ -1154,6 +1154,102 @@ TEST_F(TensorTest, ScalarTensorErrors) {
   EXPECT_DEATH(unallocated_scalar.set_scalar_value<float>(1.0f), ".*");
 }
 
+// Test zeros function
+TEST_F(TensorTest, ZerosFunction) {
+  // Test 1D zeros tensor
+  {
+    std::vector<int32_t> dims = {5};
+    Tensor zeros_tensor = zeros(core::DataType::FP32, dims, cpu_memory_manager);
+
+    // Verify tensor properties
+    EXPECT_EQ(zeros_tensor.data_type(), core::DataType::FP32);
+    EXPECT_EQ(zeros_tensor.size(), 5);
+    EXPECT_EQ(zeros_tensor.dims_size(), 1);
+    EXPECT_EQ(zeros_tensor.get_dim(0), 5);
+    EXPECT_FALSE(zeros_tensor.is_empty());
+    EXPECT_EQ(zeros_tensor.device_type(), core::DeviceType::CPU);
+
+    // Verify all elements are zero
+    float* data = zeros_tensor.ptr<float>();
+    for (int i = 0; i < 5; i++) {
+      EXPECT_FLOAT_EQ(data[i], 0.0f);
+    }
+  }
+
+  // Test 2D zeros tensor
+  {
+    std::vector<int32_t> dims = {3, 4};
+    Tensor zeros_tensor = zeros(core::DataType::FP32, dims, cpu_memory_manager);
+
+    // Verify tensor properties
+    EXPECT_EQ(zeros_tensor.data_type(), core::DataType::FP32);
+    EXPECT_EQ(zeros_tensor.size(), 12);
+    EXPECT_EQ(zeros_tensor.dims_size(), 2);
+    EXPECT_EQ(zeros_tensor.get_dim(0), 3);
+    EXPECT_EQ(zeros_tensor.get_dim(1), 4);
+
+    // Verify all elements are zero
+    float* data = zeros_tensor.ptr<float>();
+    for (int i = 0; i < 12; i++) {
+      EXPECT_FLOAT_EQ(data[i], 0.0f);
+    }
+  }
+
+  // Test 3D zeros tensor with INT32 data type
+  {
+    std::vector<int32_t> dims = {2, 3, 4};
+    Tensor zeros_tensor = zeros(core::DataType::INT32, dims, cpu_memory_manager);
+
+    // Verify tensor properties
+    EXPECT_EQ(zeros_tensor.data_type(), core::DataType::INT32);
+    EXPECT_EQ(zeros_tensor.size(), 24);
+    EXPECT_EQ(zeros_tensor.dims_size(), 3);
+
+    // Verify all elements are zero
+    int32_t* data = zeros_tensor.ptr<int32_t>();
+    for (int i = 0; i < 24; i++) {
+      EXPECT_EQ(data[i], 0);
+    }
+  }
+
+  // Test zeros tensor with INT8 data type
+  {
+    std::vector<int32_t> dims = {10};
+    Tensor zeros_tensor = zeros(core::DataType::INT8, dims, cpu_memory_manager);
+
+    // Verify tensor properties
+    EXPECT_EQ(zeros_tensor.data_type(), core::DataType::INT8);
+    EXPECT_EQ(zeros_tensor.size(), 10);
+
+    // Verify all elements are zero
+    int8_t* data = zeros_tensor.ptr<int8_t>();
+    for (int i = 0; i < 10; i++) {
+      EXPECT_EQ(data[i], 0);
+    }
+  }
+
+  // Test zeros with GPU memory manager if CUDA is available
+  int device_count = 0;
+  if (cudaGetDeviceCount(&device_count) == cudaSuccess && device_count > 0) {
+    std::vector<int32_t> dims = {5};
+    Tensor zeros_tensor = zeros(core::DataType::FP32, dims, gpu_memory_manager);
+
+    // Verify tensor properties
+    EXPECT_EQ(zeros_tensor.data_type(), core::DataType::FP32);
+    EXPECT_EQ(zeros_tensor.size(), 5);
+    EXPECT_EQ(zeros_tensor.device_type(), core::DeviceType::GPU);
+
+    // Transfer to CPU for verification
+    zeros_tensor.to_cpu();
+
+    // Verify all elements are zero
+    float* data = zeros_tensor.ptr<float>();
+    for (int i = 0; i < 5; i++) {
+      EXPECT_FLOAT_EQ(data[i], 0.0f);
+    }
+  }
+}
+
 }  // namespace
 }  // namespace tensor
 
