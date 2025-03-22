@@ -24,9 +24,9 @@ using MHAKernel = std::function<void(int32_t, int32_t, int32_t, int32_t, int32_t
 using RMSNormKernel =
     std::function<void(const tensor::Tensor&, const tensor::Tensor&, const tensor::Tensor&, void*)>;
 
-using RoPEKernel =
-    std::function<void(int32_t, int32_t, int32_t, const tensor::Tensor&, const tensor::Tensor&,
-                       const tensor::Tensor&, const tensor::Tensor&, const tensor::Tensor&, void*)>;
+using RoPEKernel = std::function<void(
+    int32_t, int32_t, int32_t, const tensor::Tensor&, const tensor::Tensor&, const tensor::Tensor&,
+    const tensor::Tensor&, const tensor::Tensor&, const tensor::Tensor&, void*)>;
 
 using SinCosCacheCalcKernel =
     std::function<void(float, int, int, const tensor::Tensor&, const tensor::Tensor&, void*)>;

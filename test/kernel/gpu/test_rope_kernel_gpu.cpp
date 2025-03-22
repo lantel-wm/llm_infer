@@ -86,7 +86,7 @@ TEST_F(RopeKernelGPUTest, TestSinCosCacheCalc) {
   }
 }
 
-TEST_F(RopeKernelGPUTest, TestRope) {
+TEST_F(RopeKernelGPUTest, TestRopePrefill) {
   if (!cuda_available) {
     GTEST_SKIP() << "Skipping GPU kernel tests because no CUDA device is available";
   }
@@ -129,8 +129,8 @@ TEST_F(RopeKernelGPUTest, TestRope) {
     pos_cpu.at<int32_t>(pos_idx) = pos_idx;
   }
 
-  rope_kernel_cpu(hidden_size, key_value_size, head_size, q_cpu, k_cpu, pos_cpu, sin_cpu, cos_cpu,
-                  nullptr);
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q_cpu, k_cpu, pos_cpu, pos_cpu, sin_cpu,
+                  cos_cpu, nullptr);
 
   pos_gpu = pos_cpu.clone();
   q_gpu = q_cpu.clone();
@@ -139,8 +139,79 @@ TEST_F(RopeKernelGPUTest, TestRope) {
   q_gpu.to_cuda();
   k_gpu.to_cuda();
 
-  rope_kernel_gpu(hidden_size, key_value_size, head_size, q_gpu, k_gpu, pos_gpu, sin_gpu, cos_gpu,
-                  nullptr);
+  rope_kernel_gpu(hidden_size, key_value_size, head_size, q_gpu, k_gpu, pos_gpu, pos_gpu, sin_gpu,
+                  cos_gpu, nullptr);
+  q_gpu.to_cpu();
+  k_gpu.to_cpu();
+
+  for (int i = 0; i < q_cpu.size(); i++) {
+    EXPECT_NEAR(q_cpu.index<float>(i), q_gpu.index<float>(i), 1e-5f);
+  }
+  for (int i = 0; i < k_cpu.size(); i++) {
+    EXPECT_NEAR(k_cpu.index<float>(i), k_gpu.index<float>(i), 1e-5f);
+  }
+}
+
+TEST_F(RopeKernelGPUTest, TestRopeDecode) {
+  if (!cuda_available) {
+    GTEST_SKIP() << "Skipping GPU kernel tests because no CUDA device is available";
+  }
+
+  const float rope_theta = 1000000.0f;
+  const int32_t max_position_embeddings = 512;
+  const int32_t hidden_size = 512;
+  const int32_t num_attention_heads = 16;
+  const int32_t num_key_value_heads = 4;
+  const int32_t head_size = hidden_size / num_attention_heads;
+  const int32_t key_value_size = head_size * num_key_value_heads;
+  const int32_t batch_size = 4;
+  const int32_t query_seq_len = 1;
+  const int32_t kv_seq_len = 4;
+
+  tensor::Tensor sin_cpu(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                         cpu_memory_manager, nullptr);
+  tensor::Tensor cos_cpu(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                         cpu_memory_manager, nullptr);
+  tensor::Tensor q_cpu(core::DataType::FP32,
+                       {batch_size, query_seq_len, num_attention_heads, head_size}, true,
+                       cpu_memory_manager, nullptr);
+  tensor::Tensor k_cpu(core::DataType::FP32,
+                       {batch_size, kv_seq_len, num_key_value_heads, head_size}, true,
+                       cpu_memory_manager, nullptr);
+  tensor::Tensor q_pos_cpu(core::DataType::INT32, query_seq_len, true, cpu_memory_manager, nullptr);
+  tensor::Tensor k_pos_cpu(core::DataType::INT32, kv_seq_len, true, cpu_memory_manager, nullptr);
+
+  tensor::Tensor sin_gpu(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                         gpu_memory_manager, nullptr);
+  tensor::Tensor cos_gpu(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                         gpu_memory_manager, nullptr);
+  tensor::Tensor q_pos_gpu, k_pos_gpu, q_gpu, k_gpu;
+
+  sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cpu, cos_cpu);
+  // sin_cos_cache_calc_gpu(rope_theta, head_size, max_position_embeddings, sin_gpu, cos_gpu,
+  // nullptr);
+
+  generate_random_tensor(q_cpu);
+  generate_random_tensor(k_cpu);
+  q_pos_cpu.at<int32_t>(0) = 0;
+  for (int pos_idx = 0; pos_idx < kv_seq_len; pos_idx++) {
+    k_pos_cpu.at<int32_t>(pos_idx) = pos_idx;
+  }
+
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q_cpu, k_cpu, q_pos_cpu, k_pos_cpu,
+                  sin_cpu, cos_cpu, nullptr);
+
+  q_pos_gpu = q_pos_cpu.clone();
+  k_pos_gpu = k_pos_cpu.clone();
+  q_gpu = q_cpu.clone();
+  k_gpu = k_cpu.clone();
+  q_pos_gpu.to_cuda();
+  k_pos_gpu.to_cuda();
+  q_gpu.to_cuda();
+  k_gpu.to_cuda();
+
+  rope_kernel_gpu(hidden_size, key_value_size, head_size, q_gpu, k_gpu, q_pos_gpu, k_pos_gpu,
+                  sin_gpu, cos_gpu, nullptr);
   q_gpu.to_cpu();
   k_gpu.to_cpu();
 

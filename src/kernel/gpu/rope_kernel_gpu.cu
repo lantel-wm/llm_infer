@@ -67,16 +67,16 @@ __global__ void sin_cos_cache_calc_gpu_fp32(float rope_theta, int head_size, int
  * num_k_heads. It applies rotations in-place, modifying input_q and input_k directly. Each thread
  * processes one (head, pair) combination.
  */
-__global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size, const int seq_len,
+__global__ void rope_kernel_gpu_fp32(const int* q_pos, const int* kv_pos, const int batch_size,
+                                     const int query_seq_len, const int kv_seq_len,
                                      const int hidden_size, const int key_value_size,
                                      const int head_size, float* input_q, float* input_k,
                                      const float* sin_cache, const float* cos_cache) {
   // Calculate indices
   const int batch_idx = blockIdx.z;
   const int pos_idx = blockIdx.y;
-  if (pos_idx >= seq_len || batch_idx >= batch_size) return;
+  if (batch_idx >= batch_size) return;
 
-  const int pos = positions[pos_idx];
   const int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
   // Calculate head and pair indices
@@ -89,34 +89,38 @@ __global__ void rope_kernel_gpu_fp32(const int* positions, const int batch_size,
     const int pair_idx = tid % (head_size / 2);
     const int head_idx = tid / (head_size / 2);
 
-    // Get the sin/cos values
-    float sin_val = sin_cache[pos * head_size + pair_idx * 2];
-    float cos_val = cos_cache[pos * head_size + pair_idx * 2];
+    if (pos_idx < query_seq_len) {
+      const int q_position = q_pos[pos_idx];
+      // Get the sin/cos values
+      float q_sin_val = sin_cache[q_position * head_size + pair_idx * 2];
+      float q_cos_val = cos_cache[q_position * head_size + pair_idx * 2];
 
-    // Calculate the base index for this batch, position, head
-    int q_base_idx = ((batch_idx * seq_len + pos_idx) * num_q_heads + head_idx) * head_size;
+      // Calculate the base index for this batch, position, head
+      int q_base_idx = ((batch_idx * query_seq_len + pos_idx) * num_q_heads + head_idx) * head_size;
+      // Get the paired x values
+      float x1 = input_q[q_base_idx + pair_idx * 2];
+      float x2 = input_q[q_base_idx + pair_idx * 2 + 1];
 
-    // Get the paired x values
-    float x1 = input_q[q_base_idx + pair_idx * 2];
-    float x2 = input_q[q_base_idx + pair_idx * 2 + 1];
-
-    // Apply rotation
-    input_q[q_base_idx + pair_idx * 2] = x1 * cos_val - x2 * sin_val;
-    input_q[q_base_idx + pair_idx * 2 + 1] = x2 * cos_val + x1 * sin_val;
+      // Apply rotation
+      input_q[q_base_idx + pair_idx * 2] = x1 * q_cos_val - x2 * q_sin_val;
+      input_q[q_base_idx + pair_idx * 2 + 1] = x2 * q_cos_val + x1 * q_sin_val;
+    }
 
     // If this thread also handles a key head (for grouped queries, not all q heads have k
     // counterparts)
-    if (head_idx < num_k_heads) {
+    if (pos_idx < kv_seq_len && head_idx < num_k_heads) {
+      const int kv_position = kv_pos[pos_idx];
+      float k_sin_val = sin_cache[kv_position * head_size + pair_idx * 2];
+      float k_cos_val = cos_cache[kv_position * head_size + pair_idx * 2];
       // Calculate the base index for this batch, position, head in k tensor
-      int k_base_idx = ((batch_idx * seq_len + pos_idx) * num_k_heads + head_idx) * head_size;
-
-      // Get the paired x values for key
-      x1 = input_k[k_base_idx + pair_idx * 2];
-      x2 = input_k[k_base_idx + pair_idx * 2 + 1];
+      int k_base_idx = ((batch_idx * query_seq_len + pos_idx) * num_k_heads + head_idx) * head_size;
+      // Get the paired x values
+      float x1 = input_k[k_base_idx + pair_idx * 2];
+      float x2 = input_k[k_base_idx + pair_idx * 2 + 1];
 
       // Apply rotation
-      input_k[k_base_idx + pair_idx * 2] = x1 * cos_val - x2 * sin_val;
-      input_k[k_base_idx + pair_idx * 2 + 1] = x2 * cos_val + x1 * sin_val;
+      input_k[k_base_idx + pair_idx * 2] = x1 * k_cos_val - x2 * k_sin_val;
+      input_k[k_base_idx + pair_idx * 2 + 1] = x2 * k_cos_val + x1 * k_sin_val;
     }
   }
 }
@@ -170,43 +174,49 @@ void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
  * @param head_size Size of each attention head
  * @param input_q Query tensor [batch_size, seq_len, num_q_heads, head_size]
  * @param input_k Key tensor [batch_size, seq_len, num_k_heads, head_size]
- * @param input_pos Position indices tensor
+ * @param input_q_pos Position indices tensor for queries
+ * @param input_k_pos Position indices tensor for keys
  * @param sin_cache Precomputed sine values [max_seq_len, head_size]
  * @param cos_cache Precomputed cosine values [max_seq_len, head_size]
  * @param stream Optional CUDA stream for asynchronous execution
  *
  * @note The function supports grouped-query attention where the number of query heads
- *       may be larger than the number of key-value heads
+ *       may be larger than the number of key-value heads. The 3D grid is configured with
+ *       dimensions for head pairs (x), sequence positions (y), and batch size (z) for
+ *       optimal parallelization.
  */
 void rope_kernel_gpu(int32_t hidden_size, int32_t key_value_size, int32_t head_size,
                      const tensor::Tensor& input_q, const tensor::Tensor& input_k,
-                     const tensor::Tensor& input_pos, const tensor::Tensor& sin_cache,
-                     const tensor::Tensor& cos_cache, void* stream) {
+                     const tensor::Tensor& input_q_pos, const tensor::Tensor& input_k_pos,
+                     const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
+                     void* stream) {
   const int batch_size = input_q.get_dim(0);
-  const int seq_len = input_q.get_dim(1);
+  const int query_seq_len = input_q_pos.size();
+  const int kv_seq_len = input_k_pos.size();
   const int num_q_heads = hidden_size / head_size;
   const int pairs_per_head = head_size / 2;
 
   const int total_head_pairs = num_q_heads * pairs_per_head;
   const int block_size = 256;
   const int grid_size_x = (total_head_pairs + block_size - 1) / block_size;
-  const int grid_size_y = seq_len;
+  const int grid_size_y = query_seq_len;
   const int grid_size_z = batch_size;
 
   dim3 grid_size(grid_size_x, grid_size_y, grid_size_z);
-  int* pos_ptr = const_cast<int*>(input_pos.ptr<int>());
+  int* q_pos_ptr = const_cast<int*>(input_q_pos.ptr<int>());
+  int* kv_pos_ptr = const_cast<int*>(input_k_pos.ptr<int>());
   float* input_q_ptr = const_cast<float*>(input_q.ptr<float>());
   float* input_k_ptr = const_cast<float*>(input_k.ptr<float>());
 
   if (stream) {
     auto stream_ = static_cast<cudaStream_t>(stream);
     rope_kernel_gpu_fp32<<<grid_size, block_size, 0, stream_>>>(
-        pos_ptr, batch_size, seq_len, hidden_size, key_value_size, head_size, input_q_ptr,
-        input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
+        q_pos_ptr, kv_pos_ptr, batch_size, query_seq_len, kv_seq_len, hidden_size, key_value_size,
+        head_size, input_q_ptr, input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
   } else {
     rope_kernel_gpu_fp32<<<grid_size, block_size>>>(
-        pos_ptr, batch_size, seq_len, hidden_size, key_value_size, head_size, input_q_ptr,
-        input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
+        q_pos_ptr, kv_pos_ptr, batch_size, query_seq_len, kv_seq_len, hidden_size, key_value_size,
+        head_size, input_q_ptr, input_k_ptr, sin_cache.ptr<float>(), cos_cache.ptr<float>());
   }
 }
 }  // namespace kernel
