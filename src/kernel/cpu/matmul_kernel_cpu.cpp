@@ -19,7 +19,8 @@ namespace kernel {
  *       The function checks dimension compatibility: input.dim1 must equal weight.dim0
  */
 void matmul_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weight,
-                       const tensor::Tensor& output, float scale, void* stream) {
+                       const tensor::Tensor& output, const tensor::Tensor& bias, float scale,
+                       void* stream) {
   CHECK(input.is_empty() == false);
   CHECK(weight.is_empty() == false);
   CHECK(output.is_empty() == false);
@@ -47,9 +48,15 @@ void matmul_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weight
   const int32_t wei_dim1 = weight.get_dim(1);
   CHECK_EQ(in_dim1, wei_dim0);
   CHECK_EQ(output.size(), wei_dim1 * in_dim0);
+  CHECK_EQ(bias.dims_size(), 1);
+  CHECK_EQ(bias.size(), wei_dim1);
   arma::fmat input_mat(const_cast<float*>(input_ptr), in_dim1, in_dim0, false, true);
   arma::fmat weight_mat(const_cast<float*>(weight_ptr), wei_dim1, wei_dim0, false, true);
   arma::fmat output_mat(const_cast<float*>(output_ptr), wei_dim1, in_dim0, false, true);
+  arma::fvec bias_vec(const_cast<float*>(bias.ptr<float>()), wei_dim1, false, true);
   output_mat = ((input_mat.t() * weight_mat.t())).t() * scale;
+  for (int row = 0; row < in_dim0; row++) {
+    output_mat.col(row) += bias_vec;
+  }
 }
 }  // namespace kernel

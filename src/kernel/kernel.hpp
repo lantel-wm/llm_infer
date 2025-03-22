@@ -13,8 +13,9 @@ using AddKernel =
 using EmbeddingKernel = std::function<void(const tensor::Tensor&, const tensor::Tensor&,
                                            const tensor::Tensor&, int32_t, void*)>;
 
-using MatMulKernel = std::function<void(const tensor::Tensor&, const tensor::Tensor&,
-                                        const tensor::Tensor&, float, void*)>;
+using MatMulKernel =
+    std::function<void(const tensor::Tensor&, const tensor::Tensor&, const tensor::Tensor&,
+                       const tensor::Tensor&, float, void*)>;
 
 using MHAKernel = std::function<void(int32_t, int32_t, int32_t, int32_t, int32_t, tensor::Tensor&,
                                      tensor::Tensor&, tensor::Tensor&, const tensor::Tensor&,
