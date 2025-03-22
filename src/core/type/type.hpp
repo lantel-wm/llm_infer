@@ -27,8 +27,10 @@ enum class DeviceType : uint8_t {
 enum class DataType : uint8_t {
   Unknown = 0,
   FP32 = 1,
-  INT8 = 2,
-  INT32 = 3,
+  FP16 = 2,
+  BF16 = 3,
+  INT8 = 4,
+  INT32 = 5,
 };
 
 inline std::ostream& operator<<(std::ostream& os, const DataType& dt) {
