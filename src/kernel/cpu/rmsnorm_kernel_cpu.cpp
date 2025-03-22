@@ -1,6 +1,7 @@
 #include "rmsnorm_kernel_cpu.hpp"
 #include <armadillo>
 #include <cmath>
+#include <cstdint>
 
 namespace kernel {
 /**
@@ -28,18 +29,33 @@ void rmsnorm_kernel_cpu(const tensor::Tensor& input, const tensor::Tensor& weigh
         weight.device_type() == core::DeviceType::CPU &&
         output.device_type() == core::DeviceType::CPU);
 
+  CHECK_EQ(input.dims_size(), 2);
+  CHECK_EQ(output.dims_size(), 2);
+
   const float* in_ptr = input.ptr<float>();
   const float* wei_ptr = weight.ptr<float>();
   const float* out_ptr = output.ptr<float>();
-  const int32_t dim = static_cast<int32_t>(input.size());
+  const int32_t batch_size = static_cast<int32_t>(input.get_dim(0));
+  const int32_t hidden_size = static_cast<int32_t>(input.get_dim(1));
 
-  arma::fvec in_tensor(const_cast<float*>(in_ptr), dim, false, true);
-  arma::fvec out_tensor(const_cast<float*>(out_ptr), dim, false, true);
-  arma::fvec weight_tensor(const_cast<float*>(wei_ptr), dim, false, true);
+  arma::fmat in_tensor(const_cast<float*>(in_ptr), hidden_size, batch_size, false, true);
+  arma::fmat out_tensor(const_cast<float*>(out_ptr), hidden_size, batch_size, false, true);
+  arma::fmat weight_tensor(const_cast<float*>(wei_ptr), hidden_size, 1, false, true);
 
   const float eps = 1e-5f;
-  const float mean = arma::as_scalar(arma::mean(arma::pow(in_tensor, 2))) + eps;
-  const float rsqrt = 1.f / std::sqrt(mean);
-  out_tensor = weight_tensor % (rsqrt * in_tensor);
+
+  // Process each batch item separately
+  for (int32_t batch_idx = 0; batch_idx < batch_size; batch_idx++) {
+    // Extract column for current batch item
+    arma::subview_col<float> in_vec = in_tensor.col(batch_idx);
+    arma::subview_col<float> out_vec = out_tensor.col(batch_idx);
+
+    // Compute RMSNorm for this batch item
+    const float mean_square = arma::mean(arma::square(in_vec)) + eps;
+    const float rsqrt = 1.f / std::sqrt(mean_square);
+
+    // Apply normalization and scaling
+    out_vec = weight_tensor % (rsqrt * in_vec);
+  }
 }
 }  // namespace kernel
