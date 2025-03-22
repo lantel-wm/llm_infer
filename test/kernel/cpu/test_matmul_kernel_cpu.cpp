@@ -51,6 +51,7 @@ TEST_F(MatmulKernelTest, BasicOperation) {
   tensor::Tensor input(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
   tensor::Tensor weight(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -61,7 +62,7 @@ TEST_F(MatmulKernelTest, BasicOperation) {
   }
 
   // Run the matmul kernel
-  matmul_kernel_cpu(input, weight, output, 1.0f, nullptr);
+  matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
 
   // Print output for debugging
   std::cout << "Output matrix values:" << std::endl;
@@ -91,6 +92,7 @@ TEST_F(MatmulKernelTest, ScaleOperation) {
   tensor::Tensor input(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
   tensor::Tensor weight(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -101,7 +103,7 @@ TEST_F(MatmulKernelTest, ScaleOperation) {
   }
 
   // Run the matmul kernel with scale = 0.5
-  matmul_kernel_cpu(input, weight, output, scale, nullptr);
+  matmul_kernel_cpu(input, weight, output, bias, scale, nullptr);
 
   // Expected output (2x2): (input * weight) * 0.5
   const std::vector<float> expected_output = {11.0f, 14.0f, 24.5f, 32.0f};
@@ -125,6 +127,7 @@ TEST_F(MatmulKernelTest, Vector1DInput) {
   tensor::Tensor input(core::DataType::FP32, 3, true, cpu_memory_manager);
   tensor::Tensor weight(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, 2, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -135,7 +138,7 @@ TEST_F(MatmulKernelTest, Vector1DInput) {
   }
 
   // Run the matmul kernel
-  matmul_kernel_cpu(input, weight, output, 1.0f, nullptr);
+  matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
 
   // Verify results
   for (int i = 0; i < expected_output.size(); i++) {
@@ -161,6 +164,7 @@ TEST_F(MatmulKernelTest, DifferentSizes) {
     tensor::Tensor input(core::DataType::FP32, M, K, true, cpu_memory_manager);
     tensor::Tensor weight(core::DataType::FP32, K, N, true, cpu_memory_manager);
     tensor::Tensor output(core::DataType::FP32, M, N, true, cpu_memory_manager);
+    tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
     tensor::Tensor expected_output(core::DataType::FP32, M, N, true, cpu_memory_manager);
 
     // Initialize with simple pattern
@@ -183,7 +187,7 @@ TEST_F(MatmulKernelTest, DifferentSizes) {
     }
 
     // Run the matmul kernel
-    matmul_kernel_cpu(input, weight, output, 1.0f, nullptr);
+    matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
 
     // Verify results
     for (int i = 0; i < M * N; i++) {
@@ -203,6 +207,7 @@ TEST_F(MatmulKernelTest, ZeroInput) {
   tensor::Tensor input(core::DataType::FP32, M, K, true, cpu_memory_manager);
   tensor::Tensor weight(core::DataType::FP32, N, K, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, M, N, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
   // Initialize with zeros
   for (int i = 0; i < M * K; i++) {
@@ -213,7 +218,7 @@ TEST_F(MatmulKernelTest, ZeroInput) {
   }
 
   // Run the matmul kernel
-  matmul_kernel_cpu(input, weight, output, 1.0f, nullptr);
+  matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
 
   // Verify all results are zeros
   for (int i = 0; i < M * N; i++) {
@@ -229,6 +234,7 @@ TEST_F(MatmulKernelTest, IdentityMatrix) {
   tensor::Tensor input(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor identity(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, size, size, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {size}, cpu_memory_manager);
 
   // Initialize input with random values
   for (int i = 0; i < size * size; i++) {
@@ -243,7 +249,7 @@ TEST_F(MatmulKernelTest, IdentityMatrix) {
   }
 
   // Run the matmul kernel
-  matmul_kernel_cpu(input, identity, output, 1.0f, nullptr);
+  matmul_kernel_cpu(input, identity, output, bias, 1.0f, nullptr);
 
   // Verify A*I = A
   for (int i = 0; i < size * size; i++) {
@@ -280,6 +286,7 @@ TEST_F(MatmulKernelTest, RowMajorOrder) {
   tensor::Tensor input(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
   tensor::Tensor weight(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
+  tensor::Tensor bias = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize the input and weight tensors with values
   for (int i = 0; i < input_data.size(); i++) {
@@ -290,7 +297,7 @@ TEST_F(MatmulKernelTest, RowMajorOrder) {
   }
 
   // Perform matrix multiplication
-  matmul_kernel_cpu(input, weight, output, 1.0f, nullptr);
+  matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
 
   // Verify that the output matches the expected result (row major ordering)
   for (int i = 0; i < expected_output.size(); i++) {
@@ -303,6 +310,56 @@ TEST_F(MatmulKernelTest, RowMajorOrder) {
   EXPECT_NEAR(output.index<float>(1), 64.0f, 1e-6f) << "Incorrect value at position (0,1)";
   EXPECT_NEAR(output.index<float>(2), 139.0f, 1e-6f) << "Incorrect value at position (1,0)";
   EXPECT_NEAR(output.index<float>(3), 154.0f, 1e-6f) << "Incorrect value at position (1,1)";
+}
+
+// Test for bias functionality
+TEST_F(MatmulKernelTest, BiasAddition) {
+  // Setup input tensor (2x3)
+  const std::vector<float> input_data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  // Setup weight tensor (3x2)
+  const std::vector<float> weight_data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  // Setup bias tensor (2)
+  const std::vector<float> bias_data = {1.0f, 2.0f};
+
+  // Expected output (2x2): (input * weight) + bias
+  // Without bias would be: [22.0f, 28.0f, 49.0f, 64.0f]
+  // With bias: [23.0f, 30.0f, 50.0f, 66.0f]
+  const std::vector<float> expected_output = {23.0f, 30.0f, 50.0f, 66.0f};
+
+  // Create tensors
+  tensor::Tensor input(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
+  tensor::Tensor weight(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
+  tensor::Tensor output(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
+  tensor::Tensor bias(core::DataType::FP32, 2, true, cpu_memory_manager);
+
+  // Initialize input tensors
+  for (int i = 0; i < input_data.size(); i++) {
+    input.index<float>(i) = input_data[i];
+  }
+  for (int i = 0; i < weight_data.size(); i++) {
+    weight.index<float>(i) = weight_data[i];
+  }
+  // Initialize bias with provided values
+  for (int i = 0; i < bias_data.size(); i++) {
+    bias.index<float>(i) = bias_data[i];
+  }
+
+  // Perform matrix multiplication with bias
+  matmul_kernel_cpu(input, weight, output, bias, 1.0f, nullptr);
+
+  // Print output for debugging
+  std::cout << "Output matrix values with bias:" << std::endl;
+  for (int i = 0; i < output.get_dim(0); i++) {
+    for (int j = 0; j < output.get_dim(1); j++) {
+      std::cout << output.at<float>(i, j) << " ";
+    }
+    std::cout << std::endl;
+  }
+
+  // Verify results
+  for (int i = 0; i < expected_output.size(); i++) {
+    EXPECT_NEAR(output.index<float>(i), expected_output[i], 1e-6f) << "Mismatch at index " << i;
+  }
 }
 
 }  // namespace

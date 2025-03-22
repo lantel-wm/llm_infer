@@ -67,6 +67,8 @@ TEST_F(MatmulKernelGPUTest, BasicOperation) {
   tensor::Tensor weight_gpu(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
   tensor::Tensor output_gpu(core::DataType::FP32, 2, 2, true, gpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
+  tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -78,12 +80,13 @@ TEST_F(MatmulKernelGPUTest, BasicOperation) {
     weight_gpu.index<float>(i) = weight_data[i];
   }
   // Run the cpu matmul kernel
-  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu);
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
   input_gpu.to_cuda();
   weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
 
-  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu);
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
 
   output_gpu.to_cpu();
 
@@ -114,6 +117,8 @@ TEST_F(MatmulKernelGPUTest, ScaleOperation) {
   tensor::Tensor weight_gpu(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
   tensor::Tensor output_gpu(core::DataType::FP32, 2, 2, true, gpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
+  tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -126,13 +131,14 @@ TEST_F(MatmulKernelGPUTest, ScaleOperation) {
   }
 
   // Run the cpu matmul kernel with scale
-  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, scale);
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, scale, nullptr);
 
   input_gpu.to_cuda();
   weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
 
   // Run the GPU matmul kernel with scale
-  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, scale);
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, scale, nullptr);
 
   output_gpu.to_cpu();
 
@@ -161,6 +167,8 @@ TEST_F(MatmulKernelGPUTest, Vector1DInput) {
   tensor::Tensor weight_gpu(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, 2, true, cpu_memory_manager);
   tensor::Tensor output_gpu(core::DataType::FP32, 2, true, gpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
+  tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {2}, cpu_memory_manager);
 
   // Initialize input tensors
   for (int i = 0; i < input_data.size(); i++) {
@@ -173,13 +181,14 @@ TEST_F(MatmulKernelGPUTest, Vector1DInput) {
   }
 
   // Run the cpu matmul kernel
-  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu);
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
   input_gpu.to_cuda();
   weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
 
   // Run the GPU matmul kernel
-  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu);
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
 
   output_gpu.to_cpu();
 
@@ -212,10 +221,12 @@ TEST_F(MatmulKernelGPUTest, DifferentSizes) {
     tensor::Tensor input_cpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
     tensor::Tensor weight_cpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
     tensor::Tensor output_cpu(core::DataType::FP32, M, N, true, cpu_memory_manager);
+    tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
     tensor::Tensor input_gpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
     tensor::Tensor weight_gpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
     tensor::Tensor output_gpu(core::DataType::FP32, M, N, true, gpu_memory_manager);
+    tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
     // Initialize with simple pattern
     for (int i = 0; i < M * K; i++) {
@@ -230,12 +241,13 @@ TEST_F(MatmulKernelGPUTest, DifferentSizes) {
     }
 
     // Run the CPU matmul kernel
-    matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu);
+    matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
     // Run the GPU matmul kernel
     input_gpu.to_cuda();
     weight_gpu.to_cuda();
-    matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu);
+    bias_gpu.to_cuda();
+    matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
     output_gpu.to_cpu();
 
     // Verify results
@@ -260,10 +272,12 @@ TEST_F(MatmulKernelGPUTest, ZeroInput) {
   tensor::Tensor input_cpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
   tensor::Tensor weight_cpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, M, N, true, cpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
   tensor::Tensor input_gpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
   tensor::Tensor weight_gpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
   tensor::Tensor output_gpu(core::DataType::FP32, M, N, true, gpu_memory_manager);
+  tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
   // Initialize with zeros
   for (int i = 0; i < M * K; i++) {
@@ -276,12 +290,13 @@ TEST_F(MatmulKernelGPUTest, ZeroInput) {
   }
 
   // Run the CPU matmul kernel
-  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu);
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
   // Run the GPU matmul kernel
   input_gpu.to_cuda();
   weight_gpu.to_cuda();
-  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu);
+  bias_gpu.to_cuda();
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
   output_gpu.to_cpu();
 
   // Verify all results are zeros
@@ -305,10 +320,12 @@ TEST_F(MatmulKernelGPUTest, IdentityMatrix) {
   tensor::Tensor input_cpu(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor identity_cpu(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, size, size, true, cpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {size}, cpu_memory_manager);
 
   tensor::Tensor input_gpu(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor identity_gpu(core::DataType::FP32, size, size, true, cpu_memory_manager);
   tensor::Tensor output_gpu(core::DataType::FP32, size, size, true, gpu_memory_manager);
+  tensor::Tensor bias_gpu = tensor::zeros(core::DataType::FP32, {size}, cpu_memory_manager);
 
   // Initialize input with values
   for (int i = 0; i < size * size; i++) {
@@ -327,13 +344,14 @@ TEST_F(MatmulKernelGPUTest, IdentityMatrix) {
   }
 
   // Run the CPU matmul kernel
-  matmul_kernel_cpu(input_cpu, identity_cpu, output_cpu);
+  matmul_kernel_cpu(input_cpu, identity_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
   // Run the GPU matmul kernel
   input_gpu.to_cuda();
   identity_gpu.to_cuda();
+  bias_gpu.to_cuda();
 
-  matmul_kernel_gpu(input_gpu, identity_gpu, output_gpu);
+  matmul_kernel_gpu(input_gpu, identity_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
 
   output_gpu.to_cpu();
   input_gpu.to_cpu();
@@ -366,8 +384,9 @@ TEST_F(MatmulKernelGPUTest, LargeRandomMatrices) {
   tensor::Tensor input_cpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
   tensor::Tensor weight_cpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
   tensor::Tensor output_cpu(core::DataType::FP32, M, N, true, cpu_memory_manager);
+  tensor::Tensor bias_cpu = tensor::zeros(core::DataType::FP32, {N}, cpu_memory_manager);
 
-  tensor::Tensor input_gpu, weight_gpu;
+  tensor::Tensor input_gpu, weight_gpu, bias_gpu;
   tensor::Tensor output_gpu(core::DataType::FP32, M, N, true, gpu_memory_manager);
 
   // Initialize with random values
@@ -375,15 +394,18 @@ TEST_F(MatmulKernelGPUTest, LargeRandomMatrices) {
   generate_random_values(weight_cpu);
 
   // Run the CPU matmul kernel
-  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, 1.0f, nullptr);
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
 
   // Run the GPU matmul kernel
   input_gpu = input_cpu.clone();
   weight_gpu = weight_cpu.clone();
+  bias_gpu = bias_cpu.clone();
+
   input_gpu.to_cuda();
   weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
 
-  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu);
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
 
   output_gpu.to_cpu();
 
@@ -391,6 +413,128 @@ TEST_F(MatmulKernelGPUTest, LargeRandomMatrices) {
   for (int i = 0; i < M * N; i++) {
     EXPECT_NEAR(output_cpu.index<float>(i), output_gpu.index<float>(i), 1e-4f)
         << "Mismatch at index " << i << " for large random matrices";
+  }
+}
+
+// Test for bias functionality in GPU
+TEST_F(MatmulKernelGPUTest, BiasAddition) {
+  if (!cuda_available) {
+    GTEST_SKIP() << "CUDA not available, skipping GPU test";
+  }
+
+  // Setup input tensor (2x3)
+  const std::vector<float> input_data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  // Setup weight tensor (3x2)
+  const std::vector<float> weight_data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  // Setup bias tensor (2)
+  const std::vector<float> bias_data = {1.0f, 2.0f};
+
+  // Expected output (2x2): (input * weight) + bias
+  // Without bias would be: [22.0f, 28.0f, 49.0f, 64.0f]
+  // With bias: [23.0f, 30.0f, 50.0f, 66.0f]
+  const std::vector<float> expected_output = {23.0f, 30.0f, 50.0f, 66.0f};
+
+  // Create tensors
+  tensor::Tensor input_cpu(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
+  tensor::Tensor weight_cpu(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
+  tensor::Tensor output_cpu(core::DataType::FP32, 2, 2, true, cpu_memory_manager);
+  tensor::Tensor bias_cpu(core::DataType::FP32, 2, true, cpu_memory_manager);
+
+  tensor::Tensor input_gpu(core::DataType::FP32, 2, 3, true, cpu_memory_manager);
+  tensor::Tensor weight_gpu(core::DataType::FP32, 3, 2, true, cpu_memory_manager);
+  tensor::Tensor output_gpu(core::DataType::FP32, 2, 2, true, gpu_memory_manager);
+  tensor::Tensor bias_gpu(core::DataType::FP32, 2, true, cpu_memory_manager);
+
+  // Initialize input tensors
+  for (int i = 0; i < input_data.size(); i++) {
+    input_cpu.index<float>(i) = input_data[i];
+    input_gpu.index<float>(i) = input_data[i];
+  }
+  for (int i = 0; i < weight_data.size(); i++) {
+    weight_cpu.index<float>(i) = weight_data[i];
+    weight_gpu.index<float>(i) = weight_data[i];
+  }
+  // Initialize bias with provided values
+  for (int i = 0; i < bias_data.size(); i++) {
+    bias_cpu.index<float>(i) = bias_data[i];
+    bias_gpu.index<float>(i) = bias_data[i];
+  }
+
+  // Perform matrix multiplication with bias on CPU
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
+
+  // Perform matrix multiplication with bias on GPU
+  input_gpu.to_cuda();
+  weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
+  output_gpu.to_cpu();
+
+  // Print output for debugging
+  std::cout << "GPU Output matrix values with bias:" << std::endl;
+  for (int i = 0; i < output_gpu.get_dim(0); i++) {
+    for (int j = 0; j < output_gpu.get_dim(1); j++) {
+      std::cout << output_gpu.at<float>(i, j) << " ";
+    }
+    std::cout << std::endl;
+  }
+
+  // Verify results match CPU implementation
+  for (int i = 0; i < expected_output.size(); i++) {
+    EXPECT_NEAR(output_gpu.index<float>(i), expected_output[i], 1e-6f) << "Mismatch at index " << i;
+    EXPECT_NEAR(output_cpu.index<float>(i), output_gpu.index<float>(i), 1e-6f)
+        << "CPU and GPU results differ at index " << i;
+  }
+}
+
+// Test with random input, weight, and bias values
+TEST_F(MatmulKernelGPUTest, RandomDataWithBias) {
+  if (!cuda_available) {
+    GTEST_SKIP() << "CUDA not available, skipping GPU test";
+  }
+
+  // Use medium-sized matrices to test both correctness and performance
+  const int M = 32;   // Batch size / sequence length
+  const int K = 128;  // Input features
+  const int N = 256;  // Output features
+
+  // Create tensors
+  tensor::Tensor input_cpu(core::DataType::FP32, M, K, true, cpu_memory_manager);
+  tensor::Tensor weight_cpu(core::DataType::FP32, K, N, true, cpu_memory_manager);
+  tensor::Tensor bias_cpu(core::DataType::FP32, N, true, cpu_memory_manager);
+  tensor::Tensor output_cpu(core::DataType::FP32, M, N, true, cpu_memory_manager);
+
+  tensor::Tensor input_gpu, weight_gpu, bias_gpu;
+  tensor::Tensor output_gpu(core::DataType::FP32, M, N, true, gpu_memory_manager);
+
+  // Initialize with random values
+  generate_random_values(input_cpu);
+  generate_random_values(weight_cpu);
+  generate_random_values(bias_cpu);
+
+  // Clone tensors for GPU
+  input_gpu = input_cpu.clone();
+  weight_gpu = weight_cpu.clone();
+  bias_gpu = bias_cpu.clone();
+
+  // Run the CPU matmul kernel
+  matmul_kernel_cpu(input_cpu, weight_cpu, output_cpu, bias_cpu, 1.0f, nullptr);
+
+  // Move data to GPU
+  input_gpu.to_cuda();
+  weight_gpu.to_cuda();
+  bias_gpu.to_cuda();
+
+  // Run the GPU matmul kernel
+  matmul_kernel_gpu(input_gpu, weight_gpu, output_gpu, bias_gpu, 1.0f, nullptr);
+
+  // Move results back to CPU for comparison
+  output_gpu.to_cpu();
+
+  // Verify results match CPU implementation within tolerance
+  for (int i = 0; i < M * N; i++) {
+    EXPECT_NEAR(output_cpu.index<float>(i), output_gpu.index<float>(i), 1e-5f)
+        << "CPU and GPU results differ at index " << i;
   }
 }
 

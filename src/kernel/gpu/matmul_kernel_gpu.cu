@@ -19,7 +19,7 @@ namespace kernel {
  * @param N Number of columns in B and C
  */
 __global__ void matmul_kernel_gpu_fp32(const float* input, const float* weight, float* output,
-                                       float scale, int M, int K, int N) {
+                                       float* bias, float scale, int M, int K, int N) {
   // Calculate global row and column indices
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -34,7 +34,7 @@ __global__ void matmul_kernel_gpu_fp32(const float* input, const float* weight, 
     }
 
     // Write result to output
-    output[row * N + col] = scale * sum;
+    output[row * N + col] = scale * sum + bias[col];
   }
 }
 
@@ -55,7 +55,8 @@ __global__ void matmul_kernel_gpu_fp32(const float* input, const float* weight, 
  *       The function checks dimension compatibility: input.dim1 must equal weight.dim0
  */
 void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight,
-                       const tensor::Tensor& output, float scale, void* stream) {
+                       const tensor::Tensor& output, const tensor::Tensor& bias, float scale,
+                       void* stream) {
   CHECK(!input.is_empty());
   CHECK(!weight.is_empty());
   CHECK(!output.is_empty());
@@ -82,6 +83,8 @@ void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight
 
   CHECK_EQ(in_dim1, wei_dim0);
   CHECK_EQ(output.size(), in_dim0 * wei_dim1);
+  CHECK_EQ(bias.dims_size(), 1);
+  CHECK_EQ(bias.size(), wei_dim1);
 
   const int M = in_dim0;
   const int K = in_dim1;
@@ -94,13 +97,13 @@ void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight
   if (stream) {
     auto stream_ = static_cast<cudaStream_t>(stream);
     matmul_kernel_gpu_fp32<<<grid_dim, block_dim, 0, stream_>>>(
-        input.ptr<float>(), weight.ptr<float>(), const_cast<float*>(output.ptr<float>()), scale, M,
-        K, N);
+        input.ptr<float>(), weight.ptr<float>(), const_cast<float*>(output.ptr<float>()),
+        const_cast<float*>(bias.ptr<float>()), scale, M, K, N);
 
   } else {
-    matmul_kernel_gpu_fp32<<<grid_dim, block_dim>>>(input.ptr<float>(), weight.ptr<float>(),
-                                                    const_cast<float*>(output.ptr<float>()), scale,
-                                                    M, K, N);
+    matmul_kernel_gpu_fp32<<<grid_dim, block_dim>>>(
+        input.ptr<float>(), weight.ptr<float>(), const_cast<float*>(output.ptr<float>()),
+        const_cast<float*>(bias.ptr<float>()), scale, M, K, N);
   }
 }
 
