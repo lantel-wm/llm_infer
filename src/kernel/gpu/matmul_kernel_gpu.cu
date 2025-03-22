@@ -63,10 +63,12 @@ void matmul_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weight
 
   CHECK(input.device_type() == core::DeviceType::GPU &&
         weight.device_type() == core::DeviceType::GPU &&
-        output.device_type() == core::DeviceType::GPU);
+        output.device_type() == core::DeviceType::GPU &&
+        bias.device_type() == core::DeviceType::GPU);
 
   CHECK(input.dims_size() == 1 || input.dims_size() == 2);
   CHECK(weight.dims_size() == 2);
+  CHECK(bias.dims_size() == 1);
 
   int in_dim0 = 1;
   int in_dim1 = 1;
