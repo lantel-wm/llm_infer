@@ -22,15 +22,20 @@ namespace kernel {
  * @note Uses vectorized loads/stores when possible for improved performance
  */
 template <int32_t BLOCK_DIM>
-static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int size, float eps) {
+static __global__ void row_rmsnorm_f32(float* input, float* weight, float* output, int size,
+                                       float eps) {
   const int tid = threadIdx.x;
+  const int batch_idx = blockIdx.x;
 
   constexpr int pack_size = 4;
   const int pack_num = size / pack_size;
   const int pack_off = pack_size * pack_num;
 
+  float* input_batch = input + batch_idx * size;
+  float* output_batch = output + batch_idx * size;
+
   float sum = 0.0f;
-  float4* in_pack = reinterpret_cast<float4*>(in);
+  float4* in_pack = reinterpret_cast<float4*>(input_batch);
   for (int i = tid; i < pack_num; i += blockDim.x) {
     float4 in_float4 = *(in_pack + i);
     sum += in_float4.x * in_float4.x;
@@ -40,7 +45,7 @@ static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int si
   }
 
   for (int i = pack_off + tid; i < size; i += blockDim.x) {
-    sum += in[i] * in[i];
+    sum += input_batch[i] * input_batch[i];
   }
 
   using BlockReduce = cub::BlockReduce<float, BLOCK_DIM>;
@@ -54,8 +59,8 @@ static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int si
   sum = shared_val;
   const float scale = rsqrtf(sum / static_cast<float>(size) + eps);
 
-  float4* wei_pack = reinterpret_cast<float4*>(wei);
-  float4* out_pack = reinterpret_cast<float4*>(out);
+  float4* wei_pack = reinterpret_cast<float4*>(weight);
+  float4* out_pack = reinterpret_cast<float4*>(output_batch);
   for (int i = tid; i < pack_num; i += blockDim.x) {
     float4 in_float4 = *(in_pack + i);
     float4 wei_float4 = *(wei_pack + i);
@@ -65,7 +70,7 @@ static __global__ void row_rmsnorm_f32(float* in, float* wei, float* out, int si
   }
 
   for (int i = pack_off + tid; i < size; i += blockDim.x) {
-    out[i] = wei[i] * in[i] * scale;
+    output_batch[i] = weight[i] * input[i] * scale;
   }
 }
 
@@ -93,17 +98,24 @@ void rmsnorm_kernel_gpu(const tensor::Tensor& input, const tensor::Tensor& weigh
         weight.device_type() == core::DeviceType::GPU &&
         output.device_type() == core::DeviceType::GPU);
 
+  CHECK_EQ(input.dims_size(), 2);
+  CHECK_EQ(output.dims_size(), 2);
+
   const float eps = 1e-5f;
-  const int32_t size = static_cast<int32_t>(input.size());
-  float* in_ptr = const_cast<float*>(input.ptr<float>());
-  float* wei_ptr = const_cast<float*>(weight.ptr<float>());
-  float* out_ptr = const_cast<float*>(output.ptr<float>());
-  constexpr int threads_num = 128;
+  const int32_t batch_size = static_cast<int32_t>(input.get_dim(0));
+  const int32_t hidden_size = static_cast<int32_t>(input.get_dim(1));
+  float* input_ptr = const_cast<float*>(input.ptr<float>());
+  float* weight_ptr = const_cast<float*>(weight.ptr<float>());
+  float* output_ptr = const_cast<float*>(output.ptr<float>());
+  constexpr int block_size = 128;
+  const int grid_size = batch_size;
   if (stream) {
     auto stream_ = static_cast<cudaStream_t>(stream);
-    row_rmsnorm_f32<128><<<1, threads_num, 0, stream_>>>(in_ptr, wei_ptr, out_ptr, size, eps);
+    row_rmsnorm_f32<128><<<grid_size, block_size, 0, stream_>>>(input_ptr, weight_ptr, output_ptr,
+                                                                hidden_size, eps);
   } else {
-    row_rmsnorm_f32<128><<<1, threads_num>>>(in_ptr, wei_ptr, out_ptr, size, eps);
+    row_rmsnorm_f32<128>
+        <<<grid_size, block_size>>>(input_ptr, weight_ptr, output_ptr, hidden_size, eps);
   }
 }
 }  // namespace kernel
