@@ -503,6 +503,184 @@ k_rot.numpy().astype(np.float32).tofile("rope_output_k.bin")
   }
 }
 
+// Test RoPE decode against PyTorch implementation
+TEST_F(RopeKernelTest, CompareWithPyTorchDecode) {
+  {
+    std::ofstream py_file("generate_rope_decode_data.py");
+    py_file << R"(
+import numpy as np
+import torch
+
+torch.manual_seed(42)
+np.random.seed(42)
+
+def compute_cos_sin_cache(rope_theta, head_size, max_position_embeddings):
+    """Calculate sin/cos cache for rotary position embedding"""
+    inv_freq = 1.0 / (rope_theta**(torch.arange(
+            0, head_size, 2, dtype=torch.float) / head_size))
+    t = torch.arange(max_position_embeddings, dtype=torch.float)
+    freqs = torch.einsum("i,j -> ij", t, inv_freq)
+    cos = freqs.cos()
+    sin = freqs.sin()
+    cache = torch.cat((cos, sin), dim=-1)
+    return cache
+
+def apply_rotary_emb(
+    x: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Args:
+        x: [num_tokens, num_heads, head_size]
+        cos: [num_tokens, head_size // 2]
+        sin: [num_tokens, head_size // 2]
+    """
+    cos = cos.unsqueeze(-2).to(x.dtype)
+    sin = sin.unsqueeze(-2).to(x.dtype)
+    x1 = x[..., ::2]
+    x2 = x[..., 1::2]
+    o1 = x1 * cos - x2 * sin
+    o2 = x2 * cos + x1 * sin
+
+    return torch.stack((o1, o2), dim=-1).flatten(-2)
+
+# Example usage for decode scenario
+rope_theta = 10000.0
+max_position_embeddings = 512
+hidden_size = 256
+batch_size = 1
+query_seq_len = 1
+kv_seq_len = 8
+num_heads = 16
+num_kv_heads = 8
+head_size = hidden_size // num_heads
+
+# Query position is the last position
+q_position = torch.tensor([kv_seq_len - 1])
+# KV positions are 0 to kv_seq_len-1
+k_positions = torch.arange(kv_seq_len)
+    
+cos_sin_cache = compute_cos_sin_cache(rope_theta, head_size, max_position_embeddings)
+
+# Get cos/sin for query
+q_cos_sin = cos_sin_cache.index_select(0, q_position)
+q_cos, q_sin = q_cos_sin.chunk(2, dim=-1)
+
+# Get cos/sin for key
+k_cos_sin = cos_sin_cache.index_select(0, k_positions)
+k_cos, k_sin = k_cos_sin.chunk(2, dim=-1)
+
+# Create sample query and key tensors
+q = torch.randn(batch_size, query_seq_len, num_heads, head_size)
+k = torch.randn(batch_size, kv_seq_len, num_kv_heads, head_size)
+
+# Save input tensors to files
+q.numpy().astype(np.float32).tofile("rope_decode_input_q.bin")
+k.numpy().astype(np.float32).tofile("rope_decode_input_k.bin")
+
+# Apply rotary embeddings
+q_rot = apply_rotary_emb(q, q_cos, q_sin)
+k_rot = apply_rotary_emb(k, k_cos, k_sin)
+
+# Save output tensors to files
+q_rot.numpy().astype(np.float32).tofile("rope_decode_output_q.bin")
+k_rot.numpy().astype(np.float32).tofile("rope_decode_output_k.bin")
+
+# Save positions to file
+q_position.numpy().astype(np.int32).tofile("rope_decode_q_position.bin")
+k_positions.numpy().astype(np.int32).tofile("rope_decode_k_positions.bin")
+)";
+    py_file.close();
+  }
+
+  // Run Python script to generate test data
+  ASSERT_EQ(std::system("python3 generate_rope_decode_data.py"), 0)
+      << "Failed to run Python script";
+
+  // Parameters matching the Python script
+  const float rope_theta = 10000.0f;
+  const int32_t max_position_embeddings = 512;
+  const int32_t hidden_size = 256;
+  const int32_t batch_size = 1;
+  const int32_t query_seq_len = 1;
+  const int32_t kv_seq_len = 8;
+  const int32_t num_attention_heads = 16;
+  const int32_t num_key_value_heads = 8;
+  const int32_t head_size = hidden_size / num_attention_heads;
+  const int32_t key_value_size = num_key_value_heads * head_size;
+
+  // Create tensors
+  tensor::Tensor q(core::DataType::FP32,
+                   {batch_size, query_seq_len, num_attention_heads, head_size}, true,
+                   cpu_memory_manager);
+  tensor::Tensor k(core::DataType::FP32, {batch_size, kv_seq_len, num_key_value_heads, head_size},
+                   true, cpu_memory_manager);
+  tensor::Tensor q_positions(core::DataType::INT32, query_seq_len, true, cpu_memory_manager);
+  tensor::Tensor k_positions(core::DataType::INT32, kv_seq_len, true, cpu_memory_manager);
+  tensor::Tensor sin_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+  tensor::Tensor cos_cache(core::DataType::FP32, {max_position_embeddings, head_size}, true,
+                           cpu_memory_manager);
+
+  // Read input data from file
+  std::vector<float> q_data = read_binary_file<float>(
+      "rope_decode_input_q.bin", batch_size * query_seq_len * num_attention_heads * head_size);
+  std::vector<float> k_data = read_binary_file<float>(
+      "rope_decode_input_k.bin", batch_size * kv_seq_len * num_key_value_heads * head_size);
+  std::vector<int32_t> q_pos_data =
+      read_binary_file<int32_t>("rope_decode_q_position.bin", query_seq_len);
+  std::vector<int32_t> k_pos_data =
+      read_binary_file<int32_t>("rope_decode_k_positions.bin", kv_seq_len);
+
+  // Read expected output data from file
+  std::vector<float> q_expected = read_binary_file<float>(
+      "rope_decode_output_q.bin", batch_size * query_seq_len * num_attention_heads * head_size);
+  std::vector<float> k_expected = read_binary_file<float>(
+      "rope_decode_output_k.bin", batch_size * kv_seq_len * num_key_value_heads * head_size);
+
+  // Copy input data to tensors
+  std::memcpy(q.ptr<float>(), q_data.data(), q.size() * sizeof(float));
+  std::memcpy(k.ptr<float>(), k_data.data(), k.size() * sizeof(float));
+  std::memcpy(q_positions.ptr<int32_t>(), q_pos_data.data(), q_positions.size() * sizeof(int32_t));
+  std::memcpy(k_positions.ptr<int32_t>(), k_pos_data.data(), k_positions.size() * sizeof(int32_t));
+
+  // Calculate sin/cos cache
+  sin_cos_cache_calc_cpu(rope_theta, head_size, max_position_embeddings, sin_cache, cos_cache);
+
+  // Run RoPE kernel for decode scenario
+  rope_kernel_cpu(hidden_size, key_value_size, head_size, q, k, q_positions, k_positions, sin_cache,
+                  cos_cache, nullptr);
+
+  // Compare result with expected output for query
+  for (int b = 0; b < batch_size; b++) {
+    for (int s = 0; s < query_seq_len; s++) {
+      for (int n = 0; n < num_attention_heads; n++) {
+        for (int h = 0; h < head_size; h++) {
+          int idx = ((b * query_seq_len + s) * num_attention_heads + n) * head_size + h;
+          EXPECT_NEAR(q.at<float>(b, s, n, h), q_expected[idx], 1e-5f)
+              << "Q mismatch at (batch=" << b << ", seq=" << s << ", head=" << n << ", dim=" << h
+              << ")";
+        }
+      }
+    }
+  }
+
+  // Compare result with expected output for key
+  for (int b = 0; b < batch_size; b++) {
+    for (int s = 0; s < kv_seq_len; s++) {
+      for (int n = 0; n < num_key_value_heads; n++) {
+        for (int h = 0; h < head_size; h++) {
+          int k_idx = ((b * kv_seq_len + s) * num_key_value_heads + n) * head_size + h;
+          EXPECT_NEAR(k.at<float>(b, s, n, h), k_expected[k_idx], 1e-5f)
+              << "K mismatch at (batch=" << b << ", seq=" << s << ", head=" << n << ", dim=" << h
+              << ")";
+        }
+      }
+    }
+  }
+}
+
 #endif
 }  // namespace
 }  // namespace kernel

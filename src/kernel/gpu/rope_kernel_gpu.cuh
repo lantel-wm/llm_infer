@@ -8,11 +8,11 @@ void rope_kernel_gpu(int32_t hidden_size, int32_t key_value_size, int32_t head_s
                      const tensor::Tensor& input_q, const tensor::Tensor& input_k,
                      const tensor::Tensor& input_q_pos, const tensor::Tensor& input_k_pos,
                      const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
-                     void* stream);
+                     void* stream = nullptr);
 
 void sin_cos_cache_calc_gpu(float rope_theta, int head_size, int max_seq_len,
                             const tensor::Tensor& sin_cache, const tensor::Tensor& cos_cache,
-                            void* stream);
+                            void* stream = nullptr);
 
 }  // namespace kernel
 #endif  // ROPE_KERNEL_GPU_CUH

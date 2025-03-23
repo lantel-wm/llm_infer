@@ -75,45 +75,62 @@ void rope_kernel_cpu(int32_t hidden_size, int32_t key_value_size, int32_t head_s
   const int32_t batch_size = input_q.get_dim(0);
   const int32_t num_q_heads = hidden_size / head_size;
   const int32_t num_k_heads = key_value_size / head_size;
-  for (int batch = 0; batch < batch_size; batch++) {
+  for (int batch_idx = 0; batch_idx < batch_size; batch_idx++) {
     for (int pos_idx = 0; pos_idx < input_q_pos.size(); pos_idx++) {
-      const int32_t pos = input_q_pos.index<int32_t>(pos_idx);
+      const int32_t q_position = input_q_pos.index<int32_t>(pos_idx);
       // Handle query tensor
       for (int head_idx = 0; head_idx < num_q_heads; head_idx++) {
-        for (int h = 0; h < head_size / 2; h++) {
-          float sin_val = sin_cache.at<float>(pos, h * 2);
-          float cos_val = cos_cache.at<float>(pos, h * 2);
+        for (int pair_idx = 0; pair_idx < head_size / 2; pair_idx++) {
+          float q_sin_val = sin_cache.at<float>(q_position, pair_idx * 2);
+          float q_cos_val = cos_cache.at<float>(q_position, pair_idx * 2);
 
           // Get original x1 and x2 values
-          float x1 = input_q.at<float>(batch, pos_idx, head_idx, h * 2);
-          float x2 = input_q.at<float>(batch, pos_idx, head_idx, h * 2 + 1);
+          float x1 = input_q.at<float>(batch_idx, pos_idx, head_idx, pair_idx * 2);
+          float x2 = input_q.at<float>(batch_idx, pos_idx, head_idx, pair_idx * 2 + 1);
 
           // Apply rotation
           float* q_ptr = const_cast<float*>(input_q.ptr<float>());
-          int q_idx = ((batch * input_q.get_dim(1) + pos_idx) * num_q_heads + head_idx) * head_size;
-          q_ptr[q_idx + h * 2] = x1 * cos_val - x2 * sin_val;
-          q_ptr[q_idx + h * 2 + 1] = x2 * cos_val + x1 * sin_val;
+          int q_offset = input_q.get_offset(batch_idx, pos_idx, head_idx, 0);
+          q_ptr[q_offset + pair_idx * 2] = x1 * q_cos_val - x2 * q_sin_val;
+          q_ptr[q_offset + pair_idx * 2 + 1] = x2 * q_cos_val + x1 * q_sin_val;
+          // printf(
+          //     "[DEBUG_Q_CPU] batch=%d, pos_idx=%d, head_idx=%d, pair_idx=%d, q_sin_val=%lf, "
+          //     "q_cos_val=%lf, "
+          //     "x1=%lf, "
+          //     "x2=%lf, q[%d, %d, %d, %d]=%lf, q[%d, %d, %d, %d]=%lf\n",
+          //     batch_idx, pos_idx, head_idx, pair_idx, q_sin_val, q_cos_val, x1, x2, batch_idx,
+          //     pos_idx, head_idx, pair_idx * 2, q_ptr[q_offset + pair_idx * 2], batch_idx,
+          //     pos_idx, head_idx, pair_idx * 2 + 1, q_ptr[q_offset + pair_idx * 2 + 1]);
         }
       }
     }
 
     for (int pos_idx = 0; pos_idx < input_k_pos.size(); pos_idx++) {
-      const int32_t pos = input_k_pos.index<int32_t>(pos_idx);
+      const int32_t k_position = input_k_pos.index<int32_t>(pos_idx);
       // Handle key tensor
       for (int head_idx = 0; head_idx < num_k_heads; head_idx++) {
-        for (int h = 0; h < head_size / 2; h++) {
-          float sin_val = sin_cache.at<float>(pos, h * 2);
-          float cos_val = cos_cache.at<float>(pos, h * 2);
+        for (int pair_idx = 0; pair_idx < head_size / 2; pair_idx++) {
+          float k_sin_val = sin_cache.at<float>(k_position, pair_idx * 2);
+          float k_cos_val = cos_cache.at<float>(k_position, pair_idx * 2);
 
           // Get original x1 and x2 values
-          float x1 = input_k.at<float>(batch, pos_idx, head_idx, h * 2);
-          float x2 = input_k.at<float>(batch, pos_idx, head_idx, h * 2 + 1);
+          float x1 = input_k.at<float>(batch_idx, pos_idx, head_idx, pair_idx * 2);
+          float x2 = input_k.at<float>(batch_idx, pos_idx, head_idx, pair_idx * 2 + 1);
 
           // Apply rotation
           float* k_ptr = const_cast<float*>(input_k.ptr<float>());
-          int k_idx = ((batch * input_k.get_dim(1) + pos_idx) * num_k_heads + head_idx) * head_size;
-          k_ptr[k_idx + h * 2] = x1 * cos_val - x2 * sin_val;
-          k_ptr[k_idx + h * 2 + 1] = x2 * cos_val + x1 * sin_val;
+          int k_offset = input_k.get_offset(batch_idx, pos_idx, head_idx, 0);
+
+          k_ptr[k_offset + pair_idx * 2] = x1 * k_cos_val - x2 * k_sin_val;
+          k_ptr[k_offset + pair_idx * 2 + 1] = x2 * k_cos_val + x1 * k_sin_val;
+          // printf(
+          //     "[DEBUG_K_CPU] batch=%d, pos_idx=%d, head_idx=%d, pair_idx=%d, k_sin_val=%lf, "
+          //     "k_cos_val=%lf, "
+          //     "x1=%lf, "
+          //     "x2=%lf, k[%d, %d, %d, %d]=%lf, k[%d, %d, %d, %d]=%lf\n",
+          //     batch_idx, pos_idx, head_idx, pair_idx, k_sin_val, k_cos_val, x1, x2, batch_idx,
+          //     pos_idx, head_idx, pair_idx * 2, k_ptr[k_offset + pair_idx * 2], batch_idx,
+          //     pos_idx, head_idx, pair_idx * 2 + 1, k_ptr[k_offset + pair_idx * 2 + 1]);
         }
       }
     }
